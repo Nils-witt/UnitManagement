@@ -22,19 +22,19 @@
   background-color: var(--mui-palette-background-paper);
 }
 
-// Sizes match SYMBOL_HEIGHT and DOT_SIZE in MapPage.tsx.
+// --map-symbol-height is set on .map-page; the ratios match MapPage.tsx.
 .map-page__symbol {
   display: block;
-  width: 60px;
-  height: 40px;
+  width: calc(var(--map-symbol-height) * 1.5);
+  height: var(--map-symbol-height);
   object-fit: contain;
   cursor: pointer;
 }
 
 .map-page__dot {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: calc(var(--map-symbol-height) * 0.4);
+  height: calc(var(--map-symbol-height) * 0.4);
   border: 2px solid var(--mui-palette-primary-dark);
   border-radius: 50%;
   background-color: var(--mui-palette-primary-main);
@@ -54,7 +54,7 @@
 
 .map-page__hint {
   position: absolute;
-  top: 12px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -64,4 +64,30 @@
   border-radius: 4px;
   background-color: var(--mui-palette-background-paper);
   box-shadow: var(--mui-shadows-2);
+}
+
+// Styled like MapLibre's own controls in the opposite corner.
+.map-page__settings-button {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  border-radius: 4px;
+  background-color: var(--mui-palette-background-paper);
+  box-shadow: var(--mui-shadows-2);
+
+  // MUI's hover color is translucent; layered over the paper color so the
+  // map doesn't show through.
+  &:hover {
+    background-color: var(--mui-palette-background-paper);
+    background-image: linear-gradient(
+      var(--mui-palette-action-hover),
+      var(--mui-palette-action-hover)
+    );
+  }
+}
+
+// Inside the settings popover.
+.map-page__settings {
+  width: 200px;
+  padding: 8px 16px 0;
 }

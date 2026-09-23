@@ -156,6 +156,8 @@
   "map": {
     "empty": "Noch keine Einheit hat eine Position",
     "setPosition": "Neue Position setzen",
-    "pickPosition": "Klicken Sie auf die Karte, um die Position von {{name}} zu setzen"
+    "pickPosition": "Klicken Sie auf die Karte, um die Position von {{name}} zu setzen",
+    "symbolSize": "Symbolgröße",
+    "settings": "Karteneinstellungen"
   }
 }

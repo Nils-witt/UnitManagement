@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Button,
+  IconButton,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
   Paper,
+  Popover,
+  Slider,
   Typography,
 } from '@mui/material';
 import PlaceIcon from '@mui/icons-material/Place';
+import TuneIcon from '@mui/icons-material/Tune';
 import { useTranslation } from 'react-i18next';
 import * as maplibregl from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
@@ -54,9 +58,32 @@ const DEFAULT_CENTER: [number, number] = [10.45, 51.16];
 const DEFAULT_ZOOM = 5;
 const MAX_FIT_ZOOM = 15;
 
-// Symbols are 3:2, like in the unit list.
-const SYMBOL_HEIGHT = 40;
-const DOT_SIZE = 16;
+// Symbols are 3:2, like in the unit list; their height is adjustable and
+// dots scale along with it.
+const DEFAULT_SYMBOL_HEIGHT = 40;
+const MIN_SYMBOL_HEIGHT = 20;
+const MAX_SYMBOL_HEIGHT = 100;
+const DOT_RATIO = 0.4;
+const SYMBOL_HEIGHT_KEY = 'map.symbolHeight';
+
+/** The symbol height the user picked last, from localStorage. */
+function loadSymbolHeight(): number {
+  try {
+    const stored = Number(localStorage.getItem(SYMBOL_HEIGHT_KEY));
+    if (stored >= MIN_SYMBOL_HEIGHT && stored <= MAX_SYMBOL_HEIGHT) return stored;
+  } catch {
+    // Storage may be unavailable, e.g. in a private window.
+  }
+  return DEFAULT_SYMBOL_HEIGHT;
+}
+
+function saveSymbolHeight(height: number) {
+  try {
+    localStorage.setItem(SYMBOL_HEIGHT_KEY, String(height));
+  } catch {
+    // Not remembered then; the size still applies until the page is left.
+  }
+}
 
 export default function MapPage() {
   const { t } = useTranslation();
@@ -68,6 +95,8 @@ export default function MapPage() {
   // The unit being moved: while set, the next click on the map sets its position.
   const [movingId, setMovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [symbolHeight, setSymbolHeight] = useState(loadSymbolHeight);
+  const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
 
   const placed = useMemo(() => units.filter((u): u is PlacedUnit => u.position !== null), [units]);
 
@@ -143,12 +172,21 @@ export default function MapPage() {
   };
 
   return (
-    <Paper className="map-page">
+    <Paper
+      className="map-page"
+      style={{ '--map-symbol-height': `${symbolHeight}px` } as CSSProperties}
+    >
       <ErrorBanner message={error ?? loadError} />
       <div ref={containerRef} className="map-page__map" />
       {map &&
         placed.map((u) => (
-          <UnitMarker key={u.id} map={map} unit={u} onContextMenu={(e) => openMenu(u, e)} />
+          <UnitMarker
+            key={u.id}
+            map={map}
+            unit={u}
+            symbolHeight={symbolHeight}
+            onContextMenu={(e) => openMenu(u, e)}
+          />
         ))}
       <Menu
         open={menu !== null}
@@ -173,6 +211,37 @@ export default function MapPage() {
           <ListItemText>{t('map.setPosition')}</ListItemText>
         </MenuItem>
       </Menu>
+      <IconButton
+        size="small"
+        className="map-page__settings-button"
+        aria-label={t('map.settings')}
+        title={t('map.settings')}
+        onClick={(e) => setSettingsAnchor(e.currentTarget)}
+      >
+        <TuneIcon fontSize="small" />
+      </IconButton>
+      <Popover
+        open={settingsAnchor !== null}
+        anchorEl={settingsAnchor}
+        onClose={() => setSettingsAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <div className="map-page__settings">
+          <Typography variant="body2" id="map-symbol-size">
+            {t('map.symbolSize')}
+          </Typography>
+          <Slider
+            size="small"
+            aria-labelledby="map-symbol-size"
+            min={MIN_SYMBOL_HEIGHT}
+            max={MAX_SYMBOL_HEIGHT}
+            step={4}
+            value={symbolHeight}
+            onChange={(_, value) => setSymbolHeight(value)}
+            onChangeCommitted={(_, value) => saveSymbolHeight(value)}
+          />
+        </div>
+      </Popover>
       {movingUnit && (
         <div className="map-page__hint">
           <Typography variant="body2">
@@ -196,10 +265,12 @@ export default function MapPage() {
 function UnitMarker({
   map,
   unit,
+  symbolHeight,
   onContextMenu,
 }: {
   map: maplibregl.Map;
   unit: PlacedUnit;
+  symbolHeight: number;
   onContextMenu: (e: MouseEvent) => void;
 }) {
   const [element] = useState(() => document.createElement('div'));
@@ -223,8 +294,8 @@ function UnitMarker({
   }, [popup, popupContent]);
 
   useEffect(() => {
-    popup.setOffset((src ? SYMBOL_HEIGHT : DOT_SIZE) / 2);
-  }, [popup, src]);
+    popup.setOffset((src ? symbolHeight : symbolHeight * DOT_RATIO) / 2);
+  }, [popup, src, symbolHeight]);
 
   useEffect(() => {
     marker.addTo(map);

@@ -1,0 +1,11 @@
+# Git runs hooks from the repository root.
+for tool in golangci-lint govulncheck; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "pre-commit: $tool not found; install it (see README) or commit with --no-verify" >&2
+    exit 1
+  fi
+done
+
+(cd frontend && npm run lint)
+golangci-lint run ./...
+govulncheck ./...

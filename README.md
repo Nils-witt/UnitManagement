@@ -25,6 +25,8 @@ Run the Go server (`go run .`) and, in another terminal, `make dev-frontend`. Vi
 
 Format and lint the UI with `npm run format` and `npm run lint` in `frontend/`.
 
+`npm install` in `frontend/` sets up a [Husky](https://typicode.github.io/husky/) pre-commit hook (`frontend/.husky/pre-commit`) that runs `oxlint`, `golangci-lint run` and `govulncheck`. Install the Go tools first (`brew install golangci-lint govulncheck`, or `go install golang.org/x/vuln/cmd/govulncheck@latest`). Skip the hook with `git commit --no-verify`.
+
 `go build` embeds whatever is in `frontend/dist`, so run `npm run build` in `frontend/` before building the binary (`make build` does this).
 
 ## Configuration

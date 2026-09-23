@@ -29,6 +29,16 @@ Format and lint the UI with `npm run format` and `npm run lint` in `frontend/`.
 
 `go build` embeds whatever is in `frontend/dist`, so run `npm run build` in `frontend/` before building the binary (`make build` does this).
 
+## CI
+
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: `go vet`, `go test -race` and a `go mod tidy` check, `golangci-lint`, `govulncheck`, the UI's format check, lint and build, and a Docker image build (not pushed). Dependabot (`.github/dependabot.yml`) opens weekly updates for Go modules, npm packages, GitHub Actions and the Docker base images.
+
+## Releasing
+
+Releases are built with [GoReleaser](https://goreleaser.com) (`.goreleaser.yaml`). Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the UI, cross-compiles the server for Linux, macOS and Windows (amd64 and arm64), and publishes the archives to a GitHub release. The version is stamped into the binary and logged at startup.
+
+Try a local build without publishing with `goreleaser release --snapshot --clean` (output in `dist/`).
+
 ## Configuration
 
 See `.env.example`. Set `COOKIE_SECURE=true` when serving over HTTPS.

@@ -17,6 +17,9 @@ import (
 	"go-unit-mangement/internal/server"
 )
 
+// version is set at build time by GoReleaser.
+var version = "dev"
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err)
@@ -75,7 +78,7 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("listening", "addr", cfg.Addr)
+		slog.Info("listening", "addr", cfg.Addr, "version", version)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

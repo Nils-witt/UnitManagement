@@ -102,7 +102,7 @@ function UnitForm({
       </Stack>
       <Stack spacing={1.5}>
         <Typography variant="subtitle2">{t('unitSymbol.title')}</Typography>
-        <UnitSymbolFields value={symbol} onChange={setSymbol} />
+        <UnitSymbolFields value={symbol} tacticalName={tacticalName} onChange={setSymbol} />
       </Stack>
       <FormControlLabel
         control={

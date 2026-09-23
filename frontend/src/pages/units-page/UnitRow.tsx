@@ -22,7 +22,7 @@ export default function UnitRow({
     <TableRow hover>
       <TableCell>
         <Stack direction="row" spacing={1.5} className="unit-row__name">
-          <UnitSymbolIcon symbol={u.symbol} />
+          <UnitSymbolIcon symbol={u.symbol} tacticalName={u.tacticalName} />
           <div>
             {u.name}
             {tacticalName && (

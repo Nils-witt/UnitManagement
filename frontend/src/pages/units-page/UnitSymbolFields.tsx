@@ -9,7 +9,7 @@ import {
   verwaltungsstufen,
 } from '@taktische-zeichen/core';
 import { useTranslation } from 'react-i18next';
-import type { UnitSymbol } from '../../api/types';
+import type { TacticalName, UnitSymbol } from '../../api/types';
 import UnitSymbolIcon from '../../components/UnitSymbolIcon';
 import { acceptsComponent, cleanSymbol, type SymbolComponent } from '../../lib/unitSymbol';
 import './UnitSymbolFields.scss';
@@ -68,15 +68,17 @@ function OptionSelect({
 export default function UnitSymbolFields({
   value,
   onChange,
+  tacticalName,
 }: {
   value: UnitSymbol;
   onChange: (value: UnitSymbol) => void;
+  tacticalName: TacticalName | null;
 }) {
   const { t } = useTranslation();
   const set = (key: keyof UnitSymbol, v: string | undefined) => onChange({ ...value, [key]: v });
   return (
     <Stack direction="row" spacing={2} useFlexGap className="unit-symbol-fields">
-      <UnitSymbolIcon symbol={cleanSymbol(value)} size="large" />
+      <UnitSymbolIcon symbol={cleanSymbol(value)} tacticalName={tacticalName} size="large" />
       <Stack direction="row" spacing={2} useFlexGap className="unit-symbol-fields__selects">
         <OptionSelect
           label={t('unitSymbol.grundzeichen')}

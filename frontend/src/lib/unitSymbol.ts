@@ -3,8 +3,9 @@ import {
   grundzeichen,
   type ComponentType,
   type GrundzeichenId,
+  type TaktischesZeichen,
 } from '@taktische-zeichen/core';
-import type { UnitSymbol } from '../api/types';
+import type { TacticalName, UnitSymbol } from '../api/types';
 
 /** The components that can be added on top of a Grundzeichen. */
 export type SymbolComponent = Exclude<keyof UnitSymbol, 'grundzeichen'>;
@@ -39,8 +40,17 @@ export function acceptsComponent(id: GrundzeichenId | undefined, component: Comp
  * Renders the symbol as an SVG data URL. Null for a missing symbol or one the
  * library can't render, e.g. an ID it no longer knows.
  */
-export function symbolDataUrl(symbol: UnitSymbol | null): string | null {
+export function symbolDataUrl(
+  symbol: UnitSymbol | null,
+  tacticalName: TacticalName | null,
+): string | null {
   if (!symbol || (!symbol.grundzeichen && !symbol.symbol)) return null;
+  let tacSymbol: TaktischesZeichen = symbol;
+  if (tacticalName) {
+    tacSymbol.organisationName = tacticalName.organisation;
+    tacSymbol.typ = tacticalName.function;
+    tacSymbol.name = `${tacticalName.regionalAssociation}-${tacticalName.localAssociation}-${tacticalName.number}`;
+  }
   try {
     return erzeugeTaktischesZeichen(symbol).dataUrl;
   } catch {

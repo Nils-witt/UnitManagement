@@ -154,6 +154,8 @@
     "number": "Nummer"
   },
   "map": {
-    "empty": "Noch keine Einheit hat eine Position"
+    "empty": "Noch keine Einheit hat eine Position",
+    "setPosition": "Neue Position setzen",
+    "pickPosition": "Klicken Sie auf die Karte, um die Position von {{name}} zu setzen"
   }
 }

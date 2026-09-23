@@ -1,6 +1,6 @@
 # Build stages run on the build host's platform; only the Go binary is
 # cross-compiled for the target, so multi-arch builds need no emulation.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:25-alpine AS frontend
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci

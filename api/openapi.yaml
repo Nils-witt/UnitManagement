@@ -418,6 +418,44 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/units/{id}/positions:
+    parameters:
+      - $ref: "#/components/parameters/UnitId"
+    get:
+      tags: [units]
+      summary: Get a unit's position history
+      description: >
+        Lists the positions the unit has had, newest measurement first. An
+        entry is added whenever the unit's position is set or changes; clearing
+        the position keeps the history.
+      operationId: getUnitPositions
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of entries to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 1000
+      responses:
+        "200":
+          description: The position history.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PositionHistoryEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/version:
     get:
       tags: [system]
@@ -638,6 +676,22 @@ components:
           type: [string, "null"]
           format: date-time
           description: When the position was measured. Requests may omit it to mean "now".
+
+    PositionHistoryEntry:
+      allOf:
+        - $ref: "#/components/schemas/Position"
+        - type: object
+          required: [timestamp, recordedAt, recordedBy]
+          properties:
+            recordedAt:
+              type: string
+              format: date-time
+              description: When the entry was recorded.
+            recordedBy:
+              description: Who set the position; null once that user is deleted.
+              oneOf:
+                - $ref: "#/components/schemas/UserRef"
+                - type: "null"
 
     UnitRequest:
       type: object

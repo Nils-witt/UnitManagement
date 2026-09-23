@@ -115,7 +115,16 @@
     "by": "von {{name}}",
     "deletedUser": "gelöschtem Benutzer",
     "editAria": "{{name}} bearbeiten",
-    "deleteAria": "{{name}} löschen"
+    "deleteAria": "{{name}} löschen",
+    "history": "Verlauf",
+    "historyAria": "Positionsverlauf von {{name}}"
+  },
+  "unitHistory": {
+    "title": "Positionsverlauf von {{name}}",
+    "measured": "Gemessen",
+    "height": "Höhe",
+    "recorded": "Erfasst",
+    "empty": "Noch keine Positionen erfasst"
   },
   "unitsListCard": {
     "name": "Name",

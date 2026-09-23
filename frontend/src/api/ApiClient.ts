@@ -8,6 +8,7 @@
 import type {
   AuthMethods,
   CreateUserInput,
+  PositionHistoryEntry,
   Unit,
   UnitInput,
   UpdateUserInput,
@@ -150,6 +151,11 @@ export class ApiClient {
 
   updateUnit(id: string, input: UnitInput): Promise<Unit> {
     return this.sendJsonForJson(`/api/units/${id}`, 'PUT', input);
+  }
+
+  /** The unit's position history, newest measurement first. */
+  listUnitPositions(id: string): Promise<PositionHistoryEntry[]> {
+    return this.getJson(`/api/units/${id}/positions`);
   }
 
   deleteUnit(id: string): Promise<void> {

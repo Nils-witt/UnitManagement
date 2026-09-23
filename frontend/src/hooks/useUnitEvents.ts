@@ -28,13 +28,16 @@ export function useUnitEvents(): void {
         const rest = units.filter((u) => u.id !== event.id);
         return event.type === 'deleted' ? rest : [...rest, event.unit];
       });
+      // An open history refetches, in case the position changed.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unitPositions(event.id) });
     };
 
     const connect = () => {
       socket = api.openUnitEvents();
       socket.onopen = () => {
         retryMs = MIN_RETRY_MS;
-        if (connectedBefore) void queryClient.invalidateQueries({ queryKey: queryKeys.units });
+        // Prefix of the list and every position history.
+        if (connectedBefore) void queryClient.invalidateQueries({ queryKey: ['units'] });
         connectedBefore = true;
       };
       socket.onmessage = (msg) => {

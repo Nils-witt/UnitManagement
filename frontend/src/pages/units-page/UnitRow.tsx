@@ -9,10 +9,12 @@ import './UnitRow.scss';
 export default function UnitRow({
   u,
   onEdit,
+  onHistory,
   onDelete,
 }: {
   u: Unit;
   onEdit: () => void;
+  onHistory: () => void;
   onDelete: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -68,6 +70,13 @@ export default function UnitRow({
             aria-label={t('unitRow.editAria', { name: u.name })}
           >
             {t('common.edit')}
+          </Button>
+          <Button
+            size="small"
+            onClick={onHistory}
+            aria-label={t('unitRow.historyAria', { name: u.name })}
+          >
+            {t('unitRow.history')}
           </Button>
           <Button
             size="small"

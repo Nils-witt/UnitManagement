@@ -36,8 +36,20 @@ func Connect(dsn string) (*gorm.DB, error) {
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
-	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Unit{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Unit{}, &models.UnitPosition{}); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
+	}
+	// Units positioned before the history existed start it with their current
+	// position. Afterwards every unit's position is in its history, so this
+	// finds nothing.
+	err = db.Exec(`
+		INSERT INTO unit_positions (unit_id, latitude, longitude, height, timestamp, created_at, recorded_by_id)
+		SELECT u.id, u.latitude, u.longitude, u.height, u.position_timestamp, now(), u.updated_by_id
+		FROM units u
+		WHERE u.latitude IS NOT NULL AND u.longitude IS NOT NULL AND u.position_timestamp IS NOT NULL
+			AND NOT EXISTS (SELECT 1 FROM unit_positions p WHERE p.unit_id = u.id)`).Error
+	if err != nil {
+		return nil, fmt.Errorf("backfill position history: %w", err)
 	}
 
 	return db, nil

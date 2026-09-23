@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"go-unit-mangement/internal/models"
 )
@@ -68,6 +69,38 @@ func TestNormalizeTacticalName(t *testing.T) {
 			}
 			if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
 				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSamePosition(t *testing.T) {
+	t.Parallel()
+
+	f := func(v float64) *float64 { return &v }
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	at := func(lat, lon float64, height *float64, ts time.Time) *models.Unit {
+		return &models.Unit{Latitude: &lat, Longitude: &lon, Height: height, PositionTimestamp: &ts}
+	}
+
+	tests := []struct {
+		name string
+		a, b *models.Unit
+		want bool
+	}{
+		{name: "both none", a: &models.Unit{}, b: &models.Unit{}, want: true},
+		{name: "set", a: &models.Unit{}, b: at(1, 2, nil, ts), want: false},
+		{name: "cleared", a: at(1, 2, nil, ts), b: &models.Unit{}, want: false},
+		{name: "equal", a: at(1, 2, f(3), ts), b: at(1, 2, f(3), ts.In(time.Local)), want: true},
+		{name: "moved", a: at(1, 2, nil, ts), b: at(1, 2.5, nil, ts), want: false},
+		{name: "height added", a: at(1, 2, nil, ts), b: at(1, 2, f(3), ts), want: false},
+		{name: "remeasured", a: at(1, 2, nil, ts), b: at(1, 2, nil, ts.Add(time.Second)), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := samePosition(tt.a, tt.b); got != tt.want {
+				t.Errorf("samePosition = %v, want %v", got, tt.want)
 			}
 		})
 	}

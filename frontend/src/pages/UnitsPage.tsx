@@ -10,6 +10,7 @@ import { useUnits } from '../hooks/useUnits';
 import { errorMessage } from '../lib/errors';
 import type { SortDirection } from '../lib/sort';
 import UnitDialog from './units-page/UnitDialog';
+import UnitHistoryDialog from './units-page/UnitHistoryDialog';
 import UnitsListCard from './units-page/UnitsListCard';
 import { filterUnits, sortUnits, type UnitSortKey } from './units-page/unitSort';
 import './units-page/UnitsToolbar.scss';
@@ -27,6 +28,8 @@ export default function UnitsPage() {
   // flip to "new unit" during the exit animation.
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyUnit, setHistoryUnit] = useState<Unit | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const visibleUnits = useMemo(
@@ -47,6 +50,11 @@ export default function UnitsPage() {
   const openDialog = (unit: Unit | null) => {
     setEditingUnit(unit);
     setDialogOpen(true);
+  };
+
+  const openHistory = (unit: Unit) => {
+    setHistoryUnit(unit);
+    setHistoryOpen(true);
   };
 
   const onSubmit = async (input: UnitInput) => {
@@ -96,6 +104,7 @@ export default function UnitsPage() {
         sortDirection={sortDirection}
         onSort={onSort}
         onEdit={openDialog}
+        onHistory={openHistory}
         onDelete={(u) => void onDelete(u)}
       />
       <UnitDialog
@@ -103,6 +112,11 @@ export default function UnitsPage() {
         unit={editingUnit}
         onClose={() => setDialogOpen(false)}
         onSubmit={onSubmit}
+      />
+      <UnitHistoryDialog
+        open={historyOpen}
+        unit={historyUnit}
+        onClose={() => setHistoryOpen(false)}
       />
     </Box>
   );

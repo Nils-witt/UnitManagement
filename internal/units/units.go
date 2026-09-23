@@ -21,6 +21,8 @@ import (
 const (
 	MaxNameLength             = 64
 	MaxTacticalNamePartLength = 32
+	// MaxHistoryLimit caps how many position history entries History returns.
+	MaxHistoryLimit = 1000
 )
 
 var (
@@ -98,8 +100,14 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 	if err := apply(unit, in); err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Create(unit).Error; err != nil {
-		return nil, mapWriteError(err, "create unit")
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(unit).Error; err != nil {
+			return mapWriteError(err, "create unit")
+		}
+		return recordPosition(tx, unit, by)
+	})
+	if err != nil {
+		return nil, err
 	}
 	unit.CreatedBy, unit.UpdatedBy = by, by
 	s.events.Publish(Event{Type: EventCreated, ID: unit.ID, Unit: unit})
@@ -107,26 +115,38 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 }
 
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models.User) (*models.Unit, error) {
-	var unit models.Unit
-	if err := s.db.WithContext(ctx).First(&unit, "id = ?", id).Error; err != nil {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Lock the row so concurrent updates can't both miss a position change.
+		var unit models.Unit
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&unit, "id = ?", id).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrUnitNotFound
+			return ErrUnitNotFound
 		}
-		return nil, fmt.Errorf("get unit %s: %w", id, err)
-	}
-	if err := apply(&unit, in); err != nil {
+		if err != nil {
+			return fmt.Errorf("get unit %s: %w", id, err)
+		}
+		before := unit
+		if err := apply(&unit, in); err != nil {
+			return err
+		}
+		unit.UpdatedByID = &by.ID
+		// Select("*") so a cleared position is written as NULLs too.
+		res := tx.Model(&unit).
+			Select("*").Omit("id", "created_at", "created_by_id", clause.Associations).
+			Updates(&unit)
+		if res.Error != nil {
+			return mapWriteError(res.Error, fmt.Sprintf("update unit %s", id))
+		}
+		if res.RowsAffected == 0 {
+			return ErrUnitNotFound
+		}
+		if samePosition(&before, &unit) {
+			return nil
+		}
+		return recordPosition(tx, &unit, by)
+	})
+	if err != nil {
 		return nil, err
-	}
-	unit.UpdatedByID = &by.ID
-	// Select("*") so a cleared position is written as NULLs too.
-	res := s.db.WithContext(ctx).Model(&unit).
-		Select("*").Omit("id", "created_at", "created_by_id", clause.Associations).
-		Updates(&unit)
-	if res.Error != nil {
-		return nil, mapWriteError(res.Error, fmt.Sprintf("update unit %s", id))
-	}
-	if res.RowsAffected == 0 {
-		return nil, ErrUnitNotFound
 	}
 	updated, err := s.Get(ctx, id)
 	if err != nil {
@@ -146,6 +166,69 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 	s.events.Publish(Event{Type: EventDeleted, ID: id})
 	return nil
+}
+
+// History returns up to limit entries of the unit's position history, newest
+// measurement first.
+func (s *Service) History(ctx context.Context, id uuid.UUID, limit int) ([]models.UnitPosition, error) {
+	if limit <= 0 || limit > MaxHistoryLimit {
+		limit = MaxHistoryLimit
+	}
+	// Check the unit exists so an unknown ID isn't reported as an empty history.
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&models.Unit{}).Where("id = ?", id).Count(&count).Error; err != nil {
+		return nil, fmt.Errorf("get unit %s: %w", id, err)
+	}
+	if count == 0 {
+		return nil, ErrUnitNotFound
+	}
+	var history []models.UnitPosition
+	err := s.db.WithContext(ctx).Preload("RecordedBy").
+		Where("unit_id = ?", id).
+		Order("timestamp DESC").Order("id DESC").
+		Limit(limit).
+		Find(&history).Error
+	if err != nil {
+		return nil, fmt.Errorf("get position history of unit %s: %w", id, err)
+	}
+	return history, nil
+}
+
+// recordPosition appends the unit's current position, if it has one, to its
+// history.
+func recordPosition(tx *gorm.DB, unit *models.Unit, by *models.User) error {
+	if !unit.HasPosition() {
+		return nil
+	}
+	entry := models.UnitPosition{
+		UnitID:       unit.ID,
+		Latitude:     *unit.Latitude,
+		Longitude:    *unit.Longitude,
+		Height:       unit.Height,
+		Timestamp:    *unit.PositionTimestamp,
+		RecordedByID: &by.ID,
+	}
+	if err := tx.Create(&entry).Error; err != nil {
+		return fmt.Errorf("record position of unit %s: %w", unit.ID, err)
+	}
+	return nil
+}
+
+// samePosition reports whether a and b have the same position, including its
+// timestamp, or both have none.
+func samePosition(a, b *models.Unit) bool {
+	if a.HasPosition() != b.HasPosition() {
+		return false
+	}
+	if !a.HasPosition() {
+		return true
+	}
+	return *a.Latitude == *b.Latitude && *a.Longitude == *b.Longitude &&
+		equalPtr(a.Height, b.Height) && a.PositionTimestamp.Equal(*b.PositionTimestamp)
+}
+
+func equalPtr[T comparable](a, b *T) bool {
+	return a == b || (a != nil && b != nil && *a == *b)
 }
 
 func (s *Service) preload(ctx context.Context) *gorm.DB {

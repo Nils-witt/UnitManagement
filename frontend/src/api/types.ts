@@ -52,6 +52,14 @@ export interface Position {
   timestamp: string;
 }
 
+/** One entry of a unit's position history (GET /api/units/{id}/positions). */
+export interface PositionHistoryEntry extends Position {
+  /** When the entry was recorded. */
+  recordedAt: string;
+  /** Who set the position; null once that user is deleted. */
+  recordedBy: UserRef | null;
+}
+
 /** A tactical symbol (DV 102), as component IDs of @taktische-zeichen/core. */
 export type UnitSymbol = Pick<
   TaktischesZeichen,

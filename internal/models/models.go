@@ -103,3 +103,22 @@ func (n *TacticalName) Fields() []*string {
 
 // HasPosition reports whether the unit's position is known.
 func (u *Unit) HasPosition() bool { return u.Latitude != nil && u.Longitude != nil }
+
+// UnitPosition is one entry of a unit's position history. An entry is added
+// whenever a unit's position is set or changes; the history is deleted with
+// the unit.
+type UnitPosition struct {
+	ID     uint      `gorm:"primaryKey"`
+	UnitID uuid.UUID `gorm:"type:uuid;not null;index:idx_unit_positions_unit_timestamp,priority:1"`
+	Unit   *Unit     `gorm:"constraint:OnDelete:CASCADE"`
+	// Latitude and Longitude are WGS 84 degrees, Height is meters.
+	Latitude  float64  `gorm:"type:double precision;not null"`
+	Longitude float64  `gorm:"type:double precision;not null"`
+	Height    *float64 `gorm:"type:double precision"`
+	// Timestamp is when the position was measured.
+	Timestamp time.Time `gorm:"not null;index:idx_unit_positions_unit_timestamp,priority:2,sort:desc"`
+	CreatedAt time.Time
+	// RecordedByID becomes nil when that user is deleted.
+	RecordedByID *uint
+	RecordedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
+}

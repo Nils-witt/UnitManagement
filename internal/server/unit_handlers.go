@@ -2,8 +2,10 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -73,6 +75,22 @@ func toUnitResponse(u *models.Unit) unitResponse {
 	return resp
 }
 
+// positionHistoryEntry is one entry of a unit's position history.
+type positionHistoryEntry struct {
+	positionJSON
+	RecordedAt time.Time        `json:"recordedAt"`
+	RecordedBy *userRefResponse `json:"recordedBy"`
+}
+
+func toPositionHistoryEntry(p *models.UnitPosition) positionHistoryEntry {
+	ts := p.Timestamp
+	return positionHistoryEntry{
+		positionJSON: positionJSON{Lat: p.Latitude, Lon: p.Longitude, Height: p.Height, Timestamp: &ts},
+		RecordedAt:   p.CreatedAt,
+		RecordedBy:   toUserRef(p.RecordedBy),
+	}
+}
+
 func toUserRef(u *models.User) *userRefResponse {
 	if u == nil {
 		return nil
@@ -116,6 +134,32 @@ func (s *Server) handleGetUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toUnitResponse(unit))
+}
+
+func (s *Server) handleUnitPositions(w http.ResponseWriter, r *http.Request) {
+	id, ok := unitIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	limit := units.MaxHistoryLimit
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > units.MaxHistoryLimit {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("limit must be between 1 and %d", units.MaxHistoryLimit))
+			return
+		}
+		limit = n
+	}
+	history, err := s.units.History(r.Context(), id, limit)
+	if err != nil {
+		writeUnitError(w, err)
+		return
+	}
+	resp := make([]positionHistoryEntry, len(history))
+	for i := range history {
+		resp[i] = toPositionHistoryEntry(&history[i])
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleCreateUnit(w http.ResponseWriter, r *http.Request) {

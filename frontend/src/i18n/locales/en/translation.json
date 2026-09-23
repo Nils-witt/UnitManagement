@@ -115,7 +115,16 @@
     "by": "by {{name}}",
     "deletedUser": "deleted user",
     "editAria": "Edit {{name}}",
-    "deleteAria": "Delete {{name}}"
+    "deleteAria": "Delete {{name}}",
+    "history": "History",
+    "historyAria": "Position history of {{name}}"
+  },
+  "unitHistory": {
+    "title": "Position history of {{name}}",
+    "measured": "Measured",
+    "height": "Height",
+    "recorded": "Recorded",
+    "empty": "No positions recorded yet"
   },
   "unitsListCard": {
     "name": "Name",

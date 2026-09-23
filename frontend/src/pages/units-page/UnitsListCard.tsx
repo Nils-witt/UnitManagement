@@ -21,6 +21,7 @@ export default function UnitsListCard({
   sortDirection,
   onSort,
   onEdit,
+  onHistory,
   onDelete,
 }: {
   units: Unit[];
@@ -29,6 +30,7 @@ export default function UnitsListCard({
   sortDirection: SortDirection;
   onSort: (key: UnitSortKey) => void;
   onEdit: (u: Unit) => void;
+  onHistory: (u: Unit) => void;
   onDelete: (u: Unit) => void;
 }) {
   const { t } = useTranslation();
@@ -59,7 +61,13 @@ export default function UnitsListCard({
         </TableHead>
         <TableBody>
           {units.map((u) => (
-            <UnitRow key={u.id} u={u} onEdit={() => onEdit(u)} onDelete={() => onDelete(u)} />
+            <UnitRow
+              key={u.id}
+              u={u}
+              onEdit={() => onEdit(u)}
+              onHistory={() => onHistory(u)}
+              onDelete={() => onDelete(u)}
+            />
           ))}
           {units.length === 0 && (
             <TableRow>

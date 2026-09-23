@@ -1,0 +1,93 @@
+{
+  "app": {
+    "name": "Einheitenverwaltung"
+  },
+  "common": {
+    "backToHome": "Zurück zur Startseite",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "create": "Erstellen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "actions": "Aktionen",
+    "loading": "Lädt…"
+  },
+  "nav": {
+    "home": "Start",
+    "account": "Konto",
+    "logout": "Abmelden",
+    "openNavMenu": "Navigationsmenü öffnen",
+    "users": "Benutzer"
+  },
+  "auth": {
+    "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
+  },
+  "login": {
+    "usernameLabel": "Benutzername",
+    "passwordLabel": "Passwort",
+    "signIn": "Anmelden",
+    "signingIn": "Anmeldung läuft…",
+    "invalidCredentials": "Benutzername oder Passwort ist falsch.",
+    "loginFailed": "Anmeldung fehlgeschlagen",
+    "or": "oder",
+    "signInWith": "Mit {{name}} anmelden",
+    "ssoErrors": {
+      "denied": "Die Anmeldung wurde vom Identitätsanbieter abgebrochen oder abgelehnt.",
+      "expired": "Die Anmeldung hat zu lange gedauert. Bitte versuchen Sie es erneut.",
+      "failed": "Die Anmeldung per SSO ist fehlgeschlagen. Bitte versuchen Sie es erneut oder wenden Sie sich an einen Administrator."
+    }
+  },
+  "home": {
+    "welcome": "Willkommen, {{username}}",
+    "loggedIn": "Sie sind angemeldet."
+  },
+  "notFound": {
+    "message": "Seite nicht gefunden."
+  },
+  "languageSwitcher": {
+    "label": "Sprache",
+    "english": "English",
+    "german": "Deutsch"
+  },
+  "adminOnly": {
+    "message": "Sie sind nicht berechtigt, diese Seite anzuzeigen."
+  },
+  "confirmDialog": {
+    "defaultTitle": "Sind Sie sicher?",
+    "defaultConfirmLabel": "Bestätigen",
+    "cancel": "Abbrechen"
+  },
+  "users": {
+    "searchLabel": "Benutzer suchen",
+    "newUser": "Neuer Benutzer",
+    "deleteUserTitle": "Benutzer löschen",
+    "deleteUserMessage": "Benutzer „{{username}}“ löschen? Seine Sitzungen enden sofort."
+  },
+  "userDialog": {
+    "newPasswordLabel": "Neues Passwort",
+    "leaveBlankHint": "Leer lassen, um das aktuelle Passwort beizubehalten",
+    "ssoNoPasswordHint": "Meldet sich per SSO an. Setzen Sie ein Passwort, um auch die Anmeldung mit Passwort zu erlauben.",
+    "minLengthHint": "Mindestens {{count}} Zeichen",
+    "isAdmin": "Administrator",
+    "isAdminSelf": "Administrator (Sie können Ihre eigene Rolle nicht entfernen)",
+    "editTitle": "{{name}} bearbeiten",
+    "newTitle": "Neuer Benutzer"
+  },
+  "userRow": {
+    "you": "Sie",
+    "sso": "SSO",
+    "password": "Passwort",
+    "admin": "Administrator",
+    "user": "Benutzer",
+    "cantDeleteSelf": "Sie können Ihr eigenes Konto nicht löschen",
+    "editAria": "{{name}} bearbeiten",
+    "deleteAria": "{{name}} löschen"
+  },
+  "usersListCard": {
+    "signIn": "Anmeldung",
+    "role": "Rolle",
+    "created": "Erstellt",
+    "empty": "Keine Benutzer gefunden"
+  }
+}

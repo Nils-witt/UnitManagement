@@ -1,0 +1,93 @@
+{
+  "app": {
+    "name": "Unit Management"
+  },
+  "common": {
+    "backToHome": "Back to home",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "actions": "Actions",
+    "loading": "Loading…"
+  },
+  "nav": {
+    "home": "Home",
+    "account": "Account",
+    "logout": "Logout",
+    "openNavMenu": "Open navigation menu",
+    "users": "Users"
+  },
+  "auth": {
+    "sessionExpired": "Your session has expired. Please sign in again."
+  },
+  "login": {
+    "usernameLabel": "Username",
+    "passwordLabel": "Password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "invalidCredentials": "Invalid username or password.",
+    "loginFailed": "Login failed",
+    "or": "or",
+    "signInWith": "Sign in with {{name}}",
+    "ssoErrors": {
+      "denied": "Sign-in was cancelled or denied by the identity provider.",
+      "expired": "The sign-in took too long. Please try again.",
+      "failed": "Sign-in with SSO failed. Please try again or contact an administrator."
+    }
+  },
+  "home": {
+    "welcome": "Welcome, {{username}}",
+    "loggedIn": "You are logged in."
+  },
+  "notFound": {
+    "message": "Page not found."
+  },
+  "languageSwitcher": {
+    "label": "Language",
+    "english": "English",
+    "german": "Deutsch"
+  },
+  "adminOnly": {
+    "message": "You are not authorized to view this page."
+  },
+  "confirmDialog": {
+    "defaultTitle": "Are you sure?",
+    "defaultConfirmLabel": "Confirm",
+    "cancel": "Cancel"
+  },
+  "users": {
+    "searchLabel": "Search users",
+    "newUser": "New user",
+    "deleteUserTitle": "Delete user",
+    "deleteUserMessage": "Delete user \"{{username}}\"? Their sessions end immediately."
+  },
+  "userDialog": {
+    "newPasswordLabel": "New password",
+    "leaveBlankHint": "Leave blank to keep the current password",
+    "ssoNoPasswordHint": "Signs in via SSO. Set a password to also allow password sign-in.",
+    "minLengthHint": "At least {{count}} characters",
+    "isAdmin": "Administrator",
+    "isAdminSelf": "Administrator (you can't remove your own role)",
+    "editTitle": "Edit {{name}}",
+    "newTitle": "New user"
+  },
+  "userRow": {
+    "you": "you",
+    "sso": "SSO",
+    "password": "Password",
+    "admin": "Administrator",
+    "user": "User",
+    "cantDeleteSelf": "You can't delete your own account",
+    "editAria": "Edit {{name}}",
+    "deleteAria": "Delete {{name}}"
+  },
+  "usersListCard": {
+    "signIn": "Sign-in",
+    "role": "Role",
+    "created": "Created",
+    "empty": "No users found"
+  }
+}

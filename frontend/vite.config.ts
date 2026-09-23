@@ -5,6 +5,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react()],
   build: {
+    // maplibre-gl alone is ~1 MB minified and can't be split further.
+    chunkSizeWarningLimit: 1100,
     rolldownOptions: {
       output: {
         // Stable, named vendor chunks: they change only when the dependency
@@ -20,6 +22,8 @@ export default defineConfig({
               test: /node_modules[\\/](@mui[\\/](material|system|utils|styled-engine|private-theming|types)|@emotion)[\\/]/,
             },
             { name: 'query-vendor', test: /node_modules[\\/]@tanstack[\\/]/ },
+            // Only the map page loads it.
+            { name: 'maplibre-vendor', test: /node_modules[\\/]maplibre-gl[\\/]/ },
           ],
         },
       },

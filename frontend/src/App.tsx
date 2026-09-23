@@ -21,6 +21,7 @@ import { ROUTE_SEGMENTS } from './routes.ts';
 const HomePage = lazy(() => import('./pages/HomePage.tsx'));
 const UsersPage = lazy(() => import('./pages/UsersPage.tsx'));
 const UnitsPage = lazy(() => import('./pages/UnitsPage.tsx'));
+const MapPage = lazy(() => import('./pages/MapPage.tsx'));
 
 export default function App() {
   const { t } = useTranslation();
@@ -52,6 +53,7 @@ export default function App() {
                       <Route element={<BaseLayout />}>
                         <Route index element={<HomePage />} />
                         <Route path={ROUTE_SEGMENTS.units} element={<UnitsPage />} />
+                        <Route path={ROUTE_SEGMENTS.map} element={<MapPage />} />
                         <Route element={<AdminOnlyRoute />}>
                           <Route path={ROUTE_SEGMENTS.users} element={<UsersPage />} />
                         </Route>

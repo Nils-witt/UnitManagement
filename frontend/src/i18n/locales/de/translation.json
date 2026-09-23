@@ -19,7 +19,8 @@
     "logout": "Abmelden",
     "openNavMenu": "Navigationsmenü öffnen",
     "users": "Benutzer",
-    "units": "Einheiten"
+    "units": "Einheiten",
+    "map": "Karte"
   },
   "auth": {
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
@@ -151,5 +152,8 @@
     "localAssociation": "Ortsverband",
     "function": "Funktion",
     "number": "Nummer"
+  },
+  "map": {
+    "empty": "Noch keine Einheit hat eine Position"
   }
 }

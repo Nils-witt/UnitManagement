@@ -1,0 +1,53 @@
+// Fills the layout's content area, which is a flex column.
+.map-page {
+  position: relative;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+  overflow: hidden;
+}
+
+.map-page__map {
+  flex-grow: 1;
+}
+
+.map-page__empty {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 4px;
+  background-color: var(--mui-palette-background-paper);
+}
+
+// Sizes match SYMBOL_HEIGHT and DOT_SIZE in MapPage.tsx.
+.map-page__symbol {
+  display: block;
+  width: 60px;
+  height: 40px;
+  object-fit: contain;
+  cursor: pointer;
+}
+
+.map-page__dot {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--mui-palette-primary-dark);
+  border-radius: 50%;
+  background-color: var(--mui-palette-primary-main);
+  cursor: pointer;
+}
+
+// The popup's background stays white in dark mode, so its text must not
+// inherit the page's light text color.
+.map-page__popup {
+  color: #333;
+}
+
+.map-page__popup-time {
+  color: #666;
+  font-size: 0.85em;
+}

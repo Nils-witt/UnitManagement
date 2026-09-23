@@ -5,6 +5,7 @@ export const ROUTE_SEGMENTS = {
   login: 'login',
   users: 'users',
   units: 'units',
+  map: 'map',
 } as const;
 
 export const ROUTES = {
@@ -12,4 +13,5 @@ export const ROUTES = {
   login: `/${ROUTE_SEGMENTS.login}`,
   users: `/${ROUTE_SEGMENTS.users}`,
   units: `/${ROUTE_SEGMENTS.units}`,
+  map: `/${ROUTE_SEGMENTS.map}`,
 } as const;

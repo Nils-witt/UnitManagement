@@ -19,7 +19,8 @@
     "logout": "Logout",
     "openNavMenu": "Open navigation menu",
     "users": "Users",
-    "units": "Units"
+    "units": "Units",
+    "map": "Map"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -151,5 +152,8 @@
     "localAssociation": "Local association",
     "function": "Function",
     "number": "Number"
+  },
+  "map": {
+    "empty": "No unit has a position yet"
   }
 }

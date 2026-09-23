@@ -123,5 +123,16 @@
     "updated": "Updated",
     "created": "Created",
     "empty": "No units found"
+  },
+  "unitSymbol": {
+    "title": "Tactical symbol",
+    "none": "None",
+    "grundzeichen": "Base symbol",
+    "organisation": "Organization",
+    "fachaufgabe": "Task",
+    "einheit": "Unit size",
+    "verwaltungsstufe": "Administrative level",
+    "funktion": "Function",
+    "symbol": "Symbol"
   }
 }

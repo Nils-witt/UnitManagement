@@ -1,3 +1,5 @@
+import type { TaktischesZeichen } from '@taktische-zeichen/core';
+
 export interface User {
   id: number;
   username: string;
@@ -50,10 +52,23 @@ export interface Position {
   timestamp: string;
 }
 
+/** A tactical symbol (DV 102), as component IDs of @taktische-zeichen/core. */
+export type UnitSymbol = Pick<
+  TaktischesZeichen,
+  | 'grundzeichen'
+  | 'organisation'
+  | 'fachaufgabe'
+  | 'einheit'
+  | 'verwaltungsstufe'
+  | 'funktion'
+  | 'symbol'
+>;
+
 export interface Unit {
   id: string;
   name: string;
   position: Position | null;
+  symbol: UnitSymbol | null;
   createdAt: string;
   updatedAt: string;
   createdBy: UserRef | null;
@@ -64,6 +79,8 @@ export interface UnitInput {
   name: string;
   /** Null clears the position. Omitting `timestamp` means "now". */
   position: (Omit<Position, 'timestamp'> & { timestamp?: string }) | null;
+  /** Null clears the symbol. */
+  symbol: UnitSymbol | null;
 }
 
 /** A message on the unit event stream (GET /api/units/events). */

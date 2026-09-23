@@ -23,10 +23,12 @@ type positionJSON struct {
 }
 
 // unitRequest is the body of both create and update; a null or missing
-// position clears it.
+// position or symbol clears it.
 type unitRequest struct {
 	Name     string        `json:"name"`
 	Position *positionJSON `json:"position"`
+	// Symbol's JSON shape is defined by its struct tags.
+	Symbol *models.UnitSymbol `json:"symbol"`
 }
 
 // userRefResponse names the user who created or last changed something; it is
@@ -37,19 +39,21 @@ type userRefResponse struct {
 }
 
 type unitResponse struct {
-	ID        uuid.UUID        `json:"id"`
-	Name      string           `json:"name"`
-	Position  *positionJSON    `json:"position"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
-	CreatedBy *userRefResponse `json:"createdBy"`
-	UpdatedBy *userRefResponse `json:"updatedBy"`
+	ID        uuid.UUID          `json:"id"`
+	Name      string             `json:"name"`
+	Position  *positionJSON      `json:"position"`
+	Symbol    *models.UnitSymbol `json:"symbol"`
+	CreatedAt time.Time          `json:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt"`
+	CreatedBy *userRefResponse   `json:"createdBy"`
+	UpdatedBy *userRefResponse   `json:"updatedBy"`
 }
 
 func toUnitResponse(u *models.Unit) unitResponse {
 	resp := unitResponse{
 		ID:        u.ID,
 		Name:      u.Name,
+		Symbol:    u.Symbol,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 		CreatedBy: toUserRef(u.CreatedBy),
@@ -74,7 +78,7 @@ func toUserRef(u *models.User) *userRefResponse {
 }
 
 func (req *unitRequest) input() units.Input {
-	in := units.Input{Name: req.Name}
+	in := units.Input{Name: req.Name, Symbol: req.Symbol}
 	if p := req.Position; p != nil {
 		ts := time.Now()
 		if p.Timestamp != nil {
@@ -175,7 +179,8 @@ func writeUnitError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, units.ErrNameTaken):
 		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, units.ErrInvalidName), errors.Is(err, units.ErrInvalidPosition):
+	case errors.Is(err, units.ErrInvalidName), errors.Is(err, units.ErrInvalidPosition),
+		errors.Is(err, units.ErrInvalidSymbol):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		slog.Error("unit management", "err", err)

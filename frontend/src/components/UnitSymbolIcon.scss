@@ -1,0 +1,16 @@
+.unit-symbol-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.unit-symbol-icon--small {
+  width: 48px;
+  height: 32px;
+}
+
+.unit-symbol-icon--large {
+  width: 120px;
+  height: 80px;
+}

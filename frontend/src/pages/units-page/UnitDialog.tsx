@@ -1,10 +1,12 @@
 import { type FormEvent, useState } from 'react';
-import { Button, FormControlLabel, Stack, Switch, TextField } from '@mui/material';
+import { Button, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Unit, UnitInput } from '../../api/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import Modal from '../../components/Modal';
 import { errorMessage } from '../../lib/errors';
+import { cleanSymbol } from '../../lib/unitSymbol';
+import UnitSymbolFields from './UnitSymbolFields';
 import './UnitDialog.scss';
 
 /** Parses a decimal typed with either "." or "," as separator; NaN if it isn't one. */
@@ -35,6 +37,7 @@ function UnitForm({
   const [lat, setLat] = useState(initial ? String(initial.lat) : '');
   const [lon, setLon] = useState(initial ? String(initial.lon) : '');
   const [height, setHeight] = useState(initial?.height != null ? String(initial.height) : '');
+  const [symbol, setSymbol] = useState(unit?.symbol ?? {});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,7 +69,7 @@ function UnitForm({
       }
     }
     try {
-      await onSubmit({ name: name.trim(), position });
+      await onSubmit({ name: name.trim(), position, symbol: cleanSymbol(symbol) });
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -85,6 +88,10 @@ function UnitForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
+      <Stack spacing={1.5}>
+        <Typography variant="subtitle2">{t('unitSymbol.title')}</Typography>
+        <UnitSymbolFields value={symbol} onChange={setSymbol} />
+      </Stack>
       <FormControlLabel
         control={
           <Switch checked={hasPosition} onChange={(e) => setHasPosition(e.target.checked)} />

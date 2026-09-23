@@ -379,7 +379,7 @@ paths:
     put:
       tags: [units]
       summary: Update a unit
-      description: Replaces the unit's name and position; a missing or null position clears it.
+      description: Replaces the unit's name, position and symbol; a missing or null position or symbol clears it.
       operationId: updateUnit
       requestBody:
         required: true
@@ -653,10 +653,48 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Position"
             - type: "null"
+        symbol:
+          description: A missing or null symbol, or one without components, clears it.
+          oneOf:
+            - $ref: "#/components/schemas/UnitSymbol"
+            - type: "null"
+
+    UnitSymbol:
+      type: object
+      description: >
+        Tactical symbol (DV 102) as component IDs of the
+        [@taktische-zeichen/core](https://taktische-zeichen.dev/) library, which
+        renders it in the web UI. The server only checks the ID format, not the
+        catalog. Empty components are omitted.
+      properties:
+        grundzeichen:
+          $ref: "#/components/schemas/SymbolComponentId"
+        organisation:
+          $ref: "#/components/schemas/SymbolComponentId"
+        fachaufgabe:
+          $ref: "#/components/schemas/SymbolComponentId"
+        einheit:
+          $ref: "#/components/schemas/SymbolComponentId"
+        verwaltungsstufe:
+          $ref: "#/components/schemas/SymbolComponentId"
+        funktion:
+          $ref: "#/components/schemas/SymbolComponentId"
+        symbol:
+          $ref: "#/components/schemas/SymbolComponentId"
+      example:
+        grundzeichen: kraftfahrzeug-gelaendegaengig
+        organisation: feuerwehr
+        fachaufgabe: brandbekaempfung
+        einheit: gruppe
+
+    SymbolComponentId:
+      type: string
+      pattern: "^[a-z0-9-]{1,64}$"
 
     Unit:
       type: object
-      required: [id, name, position, createdAt, updatedAt, createdBy, updatedBy]
+      required:
+        [id, name, position, symbol, createdAt, updatedAt, createdBy, updatedBy]
       properties:
         id:
           type: string
@@ -666,6 +704,10 @@ components:
         position:
           oneOf:
             - $ref: "#/components/schemas/Position"
+            - type: "null"
+        symbol:
+          oneOf:
+            - $ref: "#/components/schemas/UnitSymbol"
             - type: "null"
         createdAt:
           type: string

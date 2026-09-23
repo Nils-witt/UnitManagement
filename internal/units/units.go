@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -23,7 +24,12 @@ var (
 	ErrNameTaken       = errors.New("unit name is already taken")
 	ErrInvalidName     = fmt.Errorf("unit name must be 1 to %d characters", MaxNameLength)
 	ErrInvalidPosition = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, and height finite")
+	ErrInvalidSymbol   = errors.New("symbol components must be IDs of lowercase letters, digits and dashes")
 )
+
+// symbolIDPattern matches the component IDs of @taktische-zeichen/core. The
+// server doesn't know the catalog itself; the web UI only offers valid IDs.
+var symbolIDPattern = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
 
 // Position is a unit's last known location.
 type Position struct {
@@ -34,10 +40,12 @@ type Position struct {
 	Timestamp time.Time
 }
 
-// Input holds the editable fields of a unit. A nil Position clears it.
+// Input holds the editable fields of a unit. A nil Position or Symbol clears
+// it, as does a Symbol without any components.
 type Input struct {
 	Name     string
 	Position *Position
+	Symbol   *models.UnitSymbol
 }
 
 type Service struct {
@@ -146,6 +154,12 @@ func apply(unit *models.Unit, in Input) error {
 	}
 	unit.Name = name
 
+	symbol, err := normalizeSymbol(in.Symbol)
+	if err != nil {
+		return err
+	}
+	unit.Symbol = symbol
+
 	if in.Position == nil {
 		unit.Latitude, unit.Longitude, unit.Height, unit.PositionTimestamp = nil, nil, nil, nil
 		return nil
@@ -158,6 +172,30 @@ func apply(unit *models.Unit, in Input) error {
 	ts := p.Timestamp.UTC()
 	unit.Latitude, unit.Longitude, unit.Height, unit.PositionTimestamp = &p.Latitude, &p.Longitude, p.Height, &ts
 	return nil
+}
+
+// normalizeSymbol validates s and returns a trimmed copy, or nil when it has
+// no components.
+func normalizeSymbol(s *models.UnitSymbol) (*models.UnitSymbol, error) {
+	if s == nil {
+		return nil, nil
+	}
+	out := *s
+	empty := true
+	for _, f := range out.Fields() {
+		*f = strings.TrimSpace(*f)
+		if *f == "" {
+			continue
+		}
+		if !symbolIDPattern.MatchString(*f) {
+			return nil, ErrInvalidSymbol
+		}
+		empty = false
+	}
+	if empty {
+		return nil, nil
+	}
+	return &out, nil
 }
 
 func validCoordinate(v, limit float64) bool {

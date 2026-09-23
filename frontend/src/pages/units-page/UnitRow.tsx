@@ -1,6 +1,7 @@
 import { Button, Stack, TableCell, TableRow, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Unit } from '../../api/types';
+import UnitSymbolIcon from '../../components/UnitSymbolIcon';
 import { fmtDate } from '../../lib/format';
 import './UnitRow.scss';
 
@@ -17,7 +18,12 @@ export default function UnitRow({
   const p = u.position;
   return (
     <TableRow hover>
-      <TableCell>{u.name}</TableCell>
+      <TableCell>
+        <Stack direction="row" spacing={1.5} className="unit-row__name">
+          <UnitSymbolIcon symbol={u.symbol} />
+          <span>{u.name}</span>
+        </Stack>
+      </TableCell>
       <TableCell>
         {p ? (
           <>

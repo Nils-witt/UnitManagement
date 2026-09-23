@@ -49,13 +49,36 @@ type Unit struct {
 	Longitude         *float64 `gorm:"type:double precision"`
 	Height            *float64 `gorm:"type:double precision"`
 	PositionTimestamp *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// Symbol is nil when the unit has no tactical symbol.
+	Symbol    *UnitSymbol `gorm:"serializer:json;type:jsonb"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
 	// CreatedByID and UpdatedByID become nil when that user is deleted.
 	CreatedByID *uint
 	CreatedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
 	UpdatedByID *uint
 	UpdatedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
+}
+
+// UnitSymbol describes a tactical symbol (DV 102) as the component IDs of the
+// @taktische-zeichen/core library, which renders it in the web UI. Empty
+// fields are left out of the symbol. It is stored and served as JSON.
+type UnitSymbol struct {
+	Grundzeichen     string `json:"grundzeichen,omitempty"`
+	Organisation     string `json:"organisation,omitempty"`
+	Fachaufgabe      string `json:"fachaufgabe,omitempty"`
+	Einheit          string `json:"einheit,omitempty"`
+	Verwaltungsstufe string `json:"verwaltungsstufe,omitempty"`
+	Funktion         string `json:"funktion,omitempty"`
+	Symbol           string `json:"symbol,omitempty"`
+}
+
+// Fields returns pointers to all components, for validation.
+func (s *UnitSymbol) Fields() []*string {
+	return []*string{
+		&s.Grundzeichen, &s.Organisation, &s.Fachaufgabe, &s.Einheit,
+		&s.Verwaltungsstufe, &s.Funktion, &s.Symbol,
+	}
 }
 
 // HasPosition reports whether the unit's position is known.

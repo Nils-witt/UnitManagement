@@ -1,0 +1,14 @@
+.unit-symbol-fields {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.unit-symbol-fields__selects {
+  flex: 1;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.unit-symbol-fields__select {
+  flex: 1 1 180px;
+}

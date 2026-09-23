@@ -1,0 +1,669 @@
+openapi: 3.1.0
+info:
+  title: go-unit-mangement API
+  description: |
+    JSON API of go-unit-mangement, served under `/api` next to the embedded web UI.
+
+    Authentication uses a `session` cookie, set by `POST /api/auth/login` or by
+    finishing the SSO flow. Errors are returned as `{"error": "<message>"}`.
+    Request bodies are limited to 1 MiB.
+  version: 1.0.0
+servers:
+  - url: /
+tags:
+  - name: auth
+    description: Sign-in, sign-out and the current session.
+  - name: users
+    description: User management (administrators only).
+  - name: units
+    description: Units and their last known position.
+  - name: system
+    description: Build info and health.
+
+security:
+  - sessionCookie: []
+
+paths:
+  /api/auth/methods:
+    get:
+      tags: [auth]
+      summary: List available sign-in methods
+      description: Tells the login page whether SSO is configured.
+      operationId: getAuthMethods
+      security: []
+      responses:
+        "200":
+          description: Available sign-in methods.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMethods"
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Sign in with username and password
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Signed in; the session cookie is set.
+          headers:
+            Set-Cookie:
+              description: The `session` cookie (HttpOnly, SameSite=Lax).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid username or password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: invalid username or password
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Sign out
+      description: Ends the current session, if any, and clears the session cookie. Always succeeds.
+      operationId: logout
+      security: []
+      responses:
+        "204":
+          description: Signed out; the session cookie is cleared.
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Get the signed-in user
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: The signed-in user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/auth/oidc/login:
+    get:
+      tags: [auth]
+      summary: Start SSO sign-in
+      description: |
+        Browser navigation, not an XHR call. Redirects to the OpenID Connect
+        provider. Only available when SSO is configured (404 otherwise).
+        On failure it redirects to `/login?sso_error=failed`.
+      operationId: startOidcLogin
+      security: []
+      parameters:
+        - name: redirect
+          in: query
+          description: Same-origin path to return to after sign-in. Anything else falls back to `/`.
+          schema:
+            type: string
+            example: /units
+      responses:
+        "302":
+          description: Redirect to the identity provider.
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              description: Short-lived `oidc_flow` cookie holding the sign-in state.
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/auth/oidc/callback:
+    get:
+      tags: [auth]
+      summary: SSO callback
+      description: |
+        Redirect target registered at the identity provider. On success it sets
+        the session cookie and redirects to the path passed to
+        `/api/auth/oidc/login`. On failure it redirects to
+        `/login?sso_error=<code>` with `code` one of `denied`, `expired` or
+        `failed`. Only available when SSO is configured (404 otherwise).
+      operationId: oidcCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+        - name: error_description
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the app (signed in) or back to the login page.
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              description: The `session` cookie on success; the `oidc_flow` cookie is always cleared.
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/users:
+    get:
+      tags: [users]
+      summary: List users
+      description: Sorted by username.
+      operationId: listUsers
+      responses:
+        "200":
+          description: All users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [users]
+      summary: Create a user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: The created user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: The username is already taken.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: username is already taken
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    put:
+      tags: [users]
+      summary: Update a user
+      description: |
+        Sets the administrator role and optionally a new password. Changing the
+        password ends all of the user's sessions. Administrators cannot remove
+        their own administrator role.
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: The updated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [users]
+      summary: Delete a user
+      description: Administrators cannot delete their own account.
+      operationId: deleteUser
+      responses:
+        "204":
+          description: The user was deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/units:
+    get:
+      tags: [units]
+      summary: List units
+      description: Sorted by name.
+      operationId: listUnits
+      responses:
+        "200":
+          description: All units.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Unit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [units]
+      summary: Create a unit
+      operationId: createUnit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnitRequest"
+      responses:
+        "201":
+          description: The created unit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/UnitNameTaken"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/units/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UnitId"
+    get:
+      tags: [units]
+      summary: Get a unit
+      operationId: getUnit
+      responses:
+        "200":
+          description: The unit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [units]
+      summary: Update a unit
+      description: Replaces the unit's name and position; a missing or null position clears it.
+      operationId: updateUnit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnitRequest"
+      responses:
+        "200":
+          description: The updated unit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/UnitNameTaken"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [units]
+      summary: Delete a unit
+      operationId: deleteUnit
+      responses:
+        "204":
+          description: The unit was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/version:
+    get:
+      tags: [system]
+      summary: Get build info
+      operationId: getVersion
+      security: []
+      responses:
+        "200":
+          description: Build metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Version"
+
+  /api/health:
+    get:
+      tags: [system]
+      summary: Health check
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: The server is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    UnitId:
+      name: id
+      in: path
+      required: true
+      description: Unit UUID. A malformed ID is answered with 404.
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: The request body is malformed or fails validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: invalid request body
+    Unauthorized:
+      description: No valid session.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: unauthorized
+    Forbidden:
+      description: The signed-in user is not an administrator.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: forbidden
+    NotFound:
+      description: The resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: not found
+    UnitNameTaken:
+      description: Another unit already has this name.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: unit name is already taken
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: internal error
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    AuthMethods:
+      type: object
+      required: [oidc]
+      properties:
+        oidc:
+          type: boolean
+          description: Whether SSO is configured.
+        oidcName:
+          type: string
+          description: Display name of the SSO provider; present only when `oidc` is true.
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+
+    User:
+      type: object
+      required: [id, username, isAdmin, sso, hasPassword, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        username:
+          type: string
+        isAdmin:
+          type: boolean
+        sso:
+          type: boolean
+          description: Whether the user is linked to an SSO identity.
+        hasPassword:
+          type: boolean
+          description: Whether the user can sign in with a password.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: Surrounding whitespace is trimmed.
+          minLength: 1
+          maxLength: 64
+        password:
+          type: string
+          minLength: 8
+        isAdmin:
+          type: boolean
+          default: false
+
+    UpdateUserRequest:
+      type: object
+      required: [isAdmin]
+      properties:
+        isAdmin:
+          type: boolean
+          description: The new role. Omitting it removes the administrator role.
+        password:
+          type: string
+          description: New password (at least 8 characters). Empty or missing keeps the current one.
+
+    UserRef:
+      type: object
+      description: The user who created or last changed something.
+      required: [id, username]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+
+    Position:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+        height:
+          type: [number, "null"]
+          format: double
+          description: Height in meters; null when unknown.
+        timestamp:
+          type: [string, "null"]
+          format: date-time
+          description: When the position was measured. Requests may omit it to mean "now".
+
+    UnitRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Surrounding whitespace is trimmed; must be unique.
+          minLength: 1
+          maxLength: 64
+        position:
+          description: A missing or null position clears it.
+          oneOf:
+            - $ref: "#/components/schemas/Position"
+            - type: "null"
+
+    Unit:
+      type: object
+      required: [id, name, position, createdAt, updatedAt, createdBy, updatedBy]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        position:
+          oneOf:
+            - $ref: "#/components/schemas/Position"
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          description: Null once that user has been deleted.
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        updatedBy:
+          description: Null once that user has been deleted.
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+
+    Version:
+      type: object
+      required: [commit]
+      properties:
+        commit:
+          type: string
+          description: Git commit the binary was built from.
+        version:
+          type: string
+          description: Release tag; present only for tagged builds.

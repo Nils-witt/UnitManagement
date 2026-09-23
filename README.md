@@ -45,6 +45,8 @@ See `.env.example`. Set `COOKIE_SECURE=true` when serving over HTTPS.
 
 ## API
 
+The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1).
+
 | Method | Path               | Description                          |
 |--------|--------------------|--------------------------------------|
 | POST   | `/api/auth/login`  | `{username, password}` → sets cookie |

@@ -65,3 +65,7 @@ export interface UnitInput {
   /** Null clears the position. Omitting `timestamp` means "now". */
   position: (Omit<Position, 'timestamp'> & { timestamp?: string }) | null;
 }
+
+/** A message on the unit event stream (GET /api/units/events). */
+export type UnitEvent =
+  { type: 'created' | 'updated'; id: string; unit: Unit } | { type: 'deleted'; id: string };

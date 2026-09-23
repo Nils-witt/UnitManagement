@@ -61,6 +61,7 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | DELETE | `/api/users/{id}`  | Delete user (admin)                  |
 | GET    | `/api/units`       | List units                           |
 | POST   | `/api/units`       | `{name, position?: {lat, lon, height?, timestamp?}}` |
+| GET    | `/api/units/events` | WebSocket pushing `{type, id, unit?}` on every unit create/update/delete |
 | GET    | `/api/units/{id}`  | Get unit by UUID                     |
 | PUT    | `/api/units/{id}`  | Same body as POST; a missing position clears it |
 | DELETE | `/api/units/{id}`  | Delete unit                          |

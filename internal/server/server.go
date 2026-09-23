@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"go-unit-mangement/internal/auth"
@@ -18,10 +20,33 @@ type Server struct {
 	// oidc is nil when SSO is not configured.
 	oidc  *auth.OIDCProvider
 	units *units.Service
+	// shutdown is closed by CloseStreams to end long-lived connections;
+	// streams tracks the ones still open.
+	shutdown     chan struct{}
+	shutdownOnce sync.Once
+	streams      sync.WaitGroup
 }
 
 func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service) *Server {
-	return &Server{cfg: cfg, auth: authService, oidc: oidc, units: unitService}
+	return &Server{cfg: cfg, auth: authService, oidc: oidc, units: unitService, shutdown: make(chan struct{})}
+}
+
+// CloseStreams ends every open event stream and waits until they are closed
+// or ctx is done. http.Server.Shutdown does not track hijacked WebSocket
+// connections, so call this after it.
+func (s *Server) CloseStreams(ctx context.Context) error {
+	s.shutdownOnce.Do(func() { close(s.shutdown) })
+	done := make(chan struct{})
+	go func() {
+		s.streams.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Handler builds the HTTP routes: the JSON API under /api and the embedded
@@ -46,6 +71,7 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("DELETE /api/users/{id}", admin(s.handleDeleteUser))
 
 	mux.Handle("GET /api/units", authed(s.handleListUnits))
+	mux.Handle("GET /api/units/events", authed(s.handleUnitEvents))
 	mux.Handle("POST /api/units", authed(s.handleCreateUnit))
 	mux.Handle("GET /api/units/{id}", authed(s.handleGetUnit))
 	mux.Handle("PUT /api/units/{id}", authed(s.handleUpdateUnit))
@@ -95,6 +121,10 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
 }
+
+// Unwrap lets http.ResponseController reach the underlying writer, which the
+// WebSocket upgrade needs to hijack the connection.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -26,9 +26,10 @@ export default defineConfig({
     },
   },
   server: {
-    // During `npm run dev`, forward API calls to the Go server.
+    // During `npm run dev`, forward API calls (and the unit event
+    // WebSocket) to the Go server.
     proxy: {
-      '/api': 'http://localhost:8080',
+      '/api': { target: 'http://localhost:8080', ws: true },
     },
   },
 });

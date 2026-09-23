@@ -41,11 +41,18 @@ type Input struct {
 }
 
 type Service struct {
-	db *gorm.DB
+	db     *gorm.DB
+	events *Broker
 }
 
 func NewService(db *gorm.DB) *Service {
-	return &Service{db: db}
+	return &Service{db: db, events: NewBroker()}
+}
+
+// Subscribe streams every successful create, update and delete; see
+// Broker.Subscribe.
+func (s *Service) Subscribe() (<-chan Event, func()) {
+	return s.events.Subscribe()
 }
 
 func (s *Service) List(ctx context.Context) ([]models.Unit, error) {
@@ -81,6 +88,7 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 		return nil, mapWriteError(err, "create unit")
 	}
 	unit.CreatedBy, unit.UpdatedBy = by, by
+	s.events.Publish(Event{Type: EventCreated, ID: unit.ID, Unit: unit})
 	return unit, nil
 }
 
@@ -106,7 +114,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models
 	if res.RowsAffected == 0 {
 		return nil, ErrUnitNotFound
 	}
-	return s.Get(ctx, id)
+	updated, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s.events.Publish(Event{Type: EventUpdated, ID: id, Unit: updated})
+	return updated, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
@@ -117,6 +130,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	if res.RowsAffected == 0 {
 		return ErrUnitNotFound
 	}
+	s.events.Publish(Event{Type: EventDeleted, ID: id})
 	return nil
 }
 

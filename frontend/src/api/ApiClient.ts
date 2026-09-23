@@ -155,4 +155,12 @@ export class ApiClient {
   deleteUnit(id: string): Promise<void> {
     return this.del(`/api/units/${id}`);
   }
+
+  /** Opens the WebSocket that pushes every unit change (UnitEvent JSON
+   * messages). The session cookie authenticates it like any request. */
+  openUnitEvents(): WebSocket {
+    const url = new URL('/api/units/events', window.location.href);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    return new WebSocket(url);
+  }
 }

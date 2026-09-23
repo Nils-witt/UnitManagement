@@ -68,9 +68,10 @@ func run() error {
 	}
 	go authService.CleanupExpiredSessions(ctx, time.Hour)
 
+	app := server.New(cfg, authService, oidcProvider, units.NewService(db))
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(cfg, authService, oidcProvider, units.NewService(db)).Handler(frontend.Dist()),
+		Handler:           app.Handler(frontend.Dist()),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -93,5 +94,5 @@ func run() error {
 	slog.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return srv.Shutdown(shutdownCtx)
+	return errors.Join(srv.Shutdown(shutdownCtx), app.CloseStreams(shutdownCtx))
 }

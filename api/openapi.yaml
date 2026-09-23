@@ -329,6 +329,33 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/units/events:
+    get:
+      tags: [units]
+      summary: Stream unit changes
+      description: |
+        WebSocket endpoint (`ws://` / `wss://`). After the upgrade the server
+        sends one JSON text message, a `UnitEvent`, for every unit that is
+        created, updated or deleted; it ignores anything the client sends.
+
+        Only same-origin upgrades are accepted. The stream closes when the
+        session ends (code 1008), when the server shuts down (1001), or when
+        the client falls too far behind (1013). Changes made while
+        disconnected are not replayed, so clients should refetch
+        `GET /api/units` after reconnecting.
+      operationId: streamUnitEvents
+      responses:
+        "101":
+          description: Switched to the WebSocket protocol; messages are `UnitEvent`s.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnitEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Cross-origin upgrade rejected.
+
   /api/units/{id}:
     parameters:
       - $ref: "#/components/parameters/UnitId"
@@ -656,6 +683,21 @@ components:
           oneOf:
             - $ref: "#/components/schemas/UserRef"
             - type: "null"
+
+    UnitEvent:
+      type: object
+      description: One change on the unit event stream.
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [created, updated, deleted]
+        id:
+          type: string
+          format: uuid
+        unit:
+          description: The unit after the change; absent for `deleted`.
+          $ref: "#/components/schemas/Unit"
 
     Version:
       type: object

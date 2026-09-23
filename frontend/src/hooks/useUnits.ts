@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useApi } from './useApi';
 import { queryKeys } from '../api/queryKeys';
 import { useApiQuery } from './useApiQuery';
+import { useUnitEvents } from './useUnitEvents';
 import type { Unit } from '../api/types';
 
 export interface UnitsData {
@@ -13,7 +14,7 @@ export interface UnitsData {
 
 const NO_UNITS: Unit[] = [];
 
-/** GET /api/units. */
+/** GET /api/units, kept live by the unit event stream. */
 export function useUnits(): UnitsData {
   const api = useApi();
   const {
@@ -22,6 +23,7 @@ export function useUnits(): UnitsData {
     error,
     reload: reloadUnits,
   } = useApiQuery({ queryKey: queryKeys.units, queryFn: () => api.listUnits() }, NO_UNITS);
+  useUnitEvents();
   return useMemo(
     () => ({ units, loading, error, reloadUnits }),
     [units, loading, error, reloadUnits],

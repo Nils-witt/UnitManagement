@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type User struct {
 	ID       uint   `gorm:"primaryKey"`
@@ -34,3 +38,25 @@ type Session struct {
 	ExpiresAt time.Time `gorm:"index;not null"`
 	CreatedAt time.Time
 }
+
+// Unit is a tracked unit. Its last known position is optional: the Position
+// columns are either all set (Height may still be nil) or all nil.
+type Unit struct {
+	ID   uuid.UUID `gorm:"type:uuid;primaryKey"`
+	Name string    `gorm:"uniqueIndex;not null"`
+	// Latitude and Longitude are WGS 84 degrees, Height is meters.
+	Latitude          *float64 `gorm:"type:double precision"`
+	Longitude         *float64 `gorm:"type:double precision"`
+	Height            *float64 `gorm:"type:double precision"`
+	PositionTimestamp *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	// CreatedByID and UpdatedByID become nil when that user is deleted.
+	CreatedByID *uint
+	CreatedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
+	UpdatedByID *uint
+	UpdatedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
+}
+
+// HasPosition reports whether the unit's position is known.
+func (u *Unit) HasPosition() bool { return u.Latitude != nil && u.Longitude != nil }

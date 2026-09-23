@@ -15,10 +15,9 @@ import (
 	"go-unit-mangement/internal/config"
 	"go-unit-mangement/internal/database"
 	"go-unit-mangement/internal/server"
+	"go-unit-mangement/internal/units"
+	"go-unit-mangement/internal/version"
 )
-
-// version is set at build time by GoReleaser.
-var version = "dev"
 
 func main() {
 	if err := run(); err != nil {
@@ -71,14 +70,14 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(cfg, authService, oidcProvider).Handler(frontend.Dist()),
+		Handler:           server.New(cfg, authService, oidcProvider, units.NewService(db)).Handler(frontend.Dist()),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("listening", "addr", cfg.Addr, "version", version)
+		slog.Info("listening", "addr", cfg.Addr, "version", version.Version, "commit", version.Commit)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

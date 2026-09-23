@@ -18,7 +18,8 @@
     "account": "Account",
     "logout": "Logout",
     "openNavMenu": "Open navigation menu",
-    "users": "Users"
+    "users": "Users",
+    "units": "Units"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -89,5 +90,38 @@
     "role": "Role",
     "created": "Created",
     "empty": "No users found"
+  },
+  "units": {
+    "searchLabel": "Search units",
+    "newUnit": "New unit",
+    "deleteUnitTitle": "Delete unit",
+    "deleteUnitMessage": "Delete unit \"{{name}}\"?"
+  },
+  "unitDialog": {
+    "nameLabel": "Name",
+    "hasPosition": "Position known",
+    "latLabel": "Latitude",
+    "latHint": "−90 to 90°",
+    "lonLabel": "Longitude",
+    "lonHint": "−180 to 180°",
+    "heightLabel": "Height",
+    "heightHint": "Meters, optional",
+    "editTitle": "Edit {{name}}",
+    "newTitle": "New unit"
+  },
+  "unitRow": {
+    "noPosition": "No position",
+    "height": "{{height}} m",
+    "by": "by {{name}}",
+    "deletedUser": "deleted user",
+    "editAria": "Edit {{name}}",
+    "deleteAria": "Delete {{name}}"
+  },
+  "unitsListCard": {
+    "name": "Name",
+    "position": "Position",
+    "updated": "Updated",
+    "created": "Created",
+    "empty": "No units found"
   }
 }

@@ -36,7 +36,7 @@ func Connect(dsn string) (*gorm.DB, error) {
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
-	if err := db.AutoMigrate(&models.User{}, &models.Session{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Unit{}); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
 

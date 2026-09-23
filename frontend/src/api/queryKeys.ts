@@ -3,4 +3,6 @@
 export const queryKeys = {
   authMethods: ['auth', 'methods'] as const,
   users: ['users', 'list'] as const,
+  units: ['units', 'list'] as const,
+  version: ['version'] as const,
 };

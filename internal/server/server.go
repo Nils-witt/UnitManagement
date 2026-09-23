@@ -9,17 +9,19 @@ import (
 
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/config"
+	"go-unit-mangement/internal/units"
 )
 
 type Server struct {
 	cfg  *config.Config
 	auth *auth.Service
 	// oidc is nil when SSO is not configured.
-	oidc *auth.OIDCProvider
+	oidc  *auth.OIDCProvider
+	units *units.Service
 }
 
-func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider) *Server {
-	return &Server{cfg: cfg, auth: authService, oidc: oidc}
+func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service) *Server {
+	return &Server{cfg: cfg, auth: authService, oidc: oidc, units: unitService}
 }
 
 // Handler builds the HTTP routes: the JSON API under /api and the embedded
@@ -43,6 +45,13 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("PUT /api/users/{id}", admin(s.handleUpdateUser))
 	mux.Handle("DELETE /api/users/{id}", admin(s.handleDeleteUser))
 
+	mux.Handle("GET /api/units", authed(s.handleListUnits))
+	mux.Handle("POST /api/units", authed(s.handleCreateUnit))
+	mux.Handle("GET /api/units/{id}", authed(s.handleGetUnit))
+	mux.Handle("PUT /api/units/{id}", authed(s.handleUpdateUnit))
+	mux.Handle("DELETE /api/units/{id}", authed(s.handleDeleteUnit))
+
+	mux.HandleFunc("GET /api/version", s.handleVersion)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})

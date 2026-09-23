@@ -20,6 +20,7 @@ import { ROUTE_SEGMENTS } from './routes.ts';
 // doesn't download them.
 const HomePage = lazy(() => import('./pages/HomePage.tsx'));
 const UsersPage = lazy(() => import('./pages/UsersPage.tsx'));
+const UnitsPage = lazy(() => import('./pages/UnitsPage.tsx'));
 
 export default function App() {
   const { t } = useTranslation();
@@ -50,6 +51,7 @@ export default function App() {
                     <Route element={<ProtectedRoute />}>
                       <Route element={<BaseLayout />}>
                         <Route index element={<HomePage />} />
+                        <Route path={ROUTE_SEGMENTS.units} element={<UnitsPage />} />
                         <Route element={<AdminOnlyRoute />}>
                           <Route path={ROUTE_SEGMENTS.users} element={<UsersPage />} />
                         </Route>

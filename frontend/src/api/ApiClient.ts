@@ -5,7 +5,15 @@
 // The session lives in an HttpOnly cookie set by the server, so the client
 // never sees a token: it only reports a 401 through `onSessionExpired`.
 
-import type { AuthMethods, CreateUserInput, UpdateUserInput, User } from './types';
+import type {
+  AuthMethods,
+  CreateUserInput,
+  Unit,
+  UnitInput,
+  UpdateUserInput,
+  User,
+  VersionInfo,
+} from './types';
 
 export class ApiError extends Error {
   /** HTTP status of the failed response; 0 if there was none. */
@@ -105,6 +113,13 @@ export class ApiClient {
     return '/api/auth/oidc/login?redirect=' + encodeURIComponent(redirect);
   }
 
+  // ---- build info ------------------------------------------------------------
+
+  /** GET /api/version. Public, so the login page footer can show it too. */
+  getVersion(): Promise<VersionInfo> {
+    return this.getJson('/api/version');
+  }
+
   // ---- users (administrators only) ----------------------------------------
 
   listUsers(): Promise<User[]> {
@@ -121,5 +136,23 @@ export class ApiClient {
 
   deleteUser(id: number): Promise<void> {
     return this.del(`/api/users/${id}`);
+  }
+
+  // ---- units ---------------------------------------------------------------
+
+  listUnits(): Promise<Unit[]> {
+    return this.getJson('/api/units');
+  }
+
+  createUnit(input: UnitInput): Promise<Unit> {
+    return this.sendJsonForJson('/api/units', 'POST', input);
+  }
+
+  updateUnit(id: string, input: UnitInput): Promise<Unit> {
+    return this.sendJsonForJson(`/api/units/${id}`, 'PUT', input);
+  }
+
+  deleteUnit(id: string): Promise<void> {
+    return this.del(`/api/units/${id}`);
   }
 }

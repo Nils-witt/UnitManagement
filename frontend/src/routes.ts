@@ -4,10 +4,12 @@
 export const ROUTE_SEGMENTS = {
   login: 'login',
   users: 'users',
+  units: 'units',
 } as const;
 
 export const ROUTES = {
   home: '/',
   login: `/${ROUTE_SEGMENTS.login}`,
   users: `/${ROUTE_SEGMENTS.users}`,
+  units: `/${ROUTE_SEGMENTS.units}`,
 } as const;

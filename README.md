@@ -57,4 +57,9 @@ See `.env.example`. Set `COOKIE_SECURE=true` when serving over HTTPS.
 | POST   | `/api/users`       | `{username, password, isAdmin}` (admin) |
 | PUT    | `/api/users/{id}`  | `{isAdmin, password?}` (admin)       |
 | DELETE | `/api/users/{id}`  | Delete user (admin)                  |
+| GET    | `/api/units`       | List units                           |
+| POST   | `/api/units`       | `{name, position?: {lat, lon, height?, timestamp?}}` |
+| GET    | `/api/units/{id}`  | Get unit by UUID                     |
+| PUT    | `/api/units/{id}`  | Same body as POST; a missing position clears it |
+| DELETE | `/api/units/{id}`  | Delete unit                          |
 | GET    | `/api/health`      | Health check                         |

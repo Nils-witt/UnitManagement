@@ -18,7 +18,8 @@
     "account": "Konto",
     "logout": "Abmelden",
     "openNavMenu": "Navigationsmenü öffnen",
-    "users": "Benutzer"
+    "users": "Benutzer",
+    "units": "Einheiten"
   },
   "auth": {
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
@@ -89,5 +90,38 @@
     "role": "Rolle",
     "created": "Erstellt",
     "empty": "Keine Benutzer gefunden"
+  },
+  "units": {
+    "searchLabel": "Einheiten suchen",
+    "newUnit": "Neue Einheit",
+    "deleteUnitTitle": "Einheit löschen",
+    "deleteUnitMessage": "Einheit „{{name}}“ löschen?"
+  },
+  "unitDialog": {
+    "nameLabel": "Name",
+    "hasPosition": "Position bekannt",
+    "latLabel": "Breitengrad",
+    "latHint": "−90 bis 90°",
+    "lonLabel": "Längengrad",
+    "lonHint": "−180 bis 180°",
+    "heightLabel": "Höhe",
+    "heightHint": "Meter, optional",
+    "editTitle": "{{name}} bearbeiten",
+    "newTitle": "Neue Einheit"
+  },
+  "unitRow": {
+    "noPosition": "Keine Position",
+    "height": "{{height}} m",
+    "by": "von {{name}}",
+    "deletedUser": "gelöschtem Benutzer",
+    "editAria": "{{name}} bearbeiten",
+    "deleteAria": "{{name}} löschen"
+  },
+  "unitsListCard": {
+    "name": "Name",
+    "position": "Position",
+    "updated": "Geändert",
+    "created": "Erstellt",
+    "empty": "Keine Einheiten gefunden"
   }
 }

@@ -28,6 +28,7 @@ export default function BaseLayout() {
 
   const tabs: { to: string; label: string }[] = [
     { to: ROUTES.home, label: t('nav.home') },
+    { to: ROUTES.units, label: t('nav.units') },
     ...(user?.isAdmin ? [{ to: ROUTES.users, label: t('nav.users') }] : []),
   ];
 

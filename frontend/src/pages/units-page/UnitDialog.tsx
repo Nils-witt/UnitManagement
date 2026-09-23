@@ -5,7 +5,9 @@ import type { Unit, UnitInput } from '../../api/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import Modal from '../../components/Modal';
 import { errorMessage } from '../../lib/errors';
+import { cleanTacticalName } from '../../lib/tacticalName';
 import { cleanSymbol } from '../../lib/unitSymbol';
+import TacticalNameFields from './TacticalNameFields';
 import UnitSymbolFields from './UnitSymbolFields';
 import './UnitDialog.scss';
 
@@ -38,6 +40,7 @@ function UnitForm({
   const [lon, setLon] = useState(initial ? String(initial.lon) : '');
   const [height, setHeight] = useState(initial?.height != null ? String(initial.height) : '');
   const [symbol, setSymbol] = useState(unit?.symbol ?? {});
+  const [tacticalName, setTacticalName] = useState(unit?.tacticalName ?? {});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,7 +72,12 @@ function UnitForm({
       }
     }
     try {
-      await onSubmit({ name: name.trim(), position, symbol: cleanSymbol(symbol) });
+      await onSubmit({
+        name: name.trim(),
+        position,
+        symbol: cleanSymbol(symbol),
+        tacticalName: cleanTacticalName(tacticalName),
+      });
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -88,6 +96,10 @@ function UnitForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
+      <Stack spacing={1.5}>
+        <Typography variant="subtitle2">{t('tacticalName.title')}</Typography>
+        <TacticalNameFields value={tacticalName} onChange={setTacticalName} />
+      </Stack>
       <Stack spacing={1.5}>
         <Typography variant="subtitle2">{t('unitSymbol.title')}</Typography>
         <UnitSymbolFields value={symbol} onChange={setSymbol} />

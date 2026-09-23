@@ -50,9 +50,11 @@ type Unit struct {
 	Height            *float64 `gorm:"type:double precision"`
 	PositionTimestamp *time.Time
 	// Symbol is nil when the unit has no tactical symbol.
-	Symbol    *UnitSymbol `gorm:"serializer:json;type:jsonb"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Symbol *UnitSymbol `gorm:"serializer:json;type:jsonb"`
+	// TacticalName is nil when the unit has no tactical name.
+	TacticalName *TacticalName `gorm:"serializer:json;type:jsonb"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 	// CreatedByID and UpdatedByID become nil when that user is deleted.
 	CreatedByID *uint
 	CreatedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
@@ -78,6 +80,24 @@ func (s *UnitSymbol) Fields() []*string {
 	return []*string{
 		&s.Grundzeichen, &s.Organisation, &s.Fachaufgabe, &s.Einheit,
 		&s.Verwaltungsstufe, &s.Funktion, &s.Symbol,
+	}
+}
+
+// TacticalName is a unit's radio call sign, e.g. "Rotkreuz Musterstadt
+// 12/83-1", split into its parts. Empty parts are left out. It is stored and
+// served as JSON.
+type TacticalName struct {
+	Organisation        string `json:"organisation,omitempty"`
+	RegionalAssociation string `json:"regionalAssociation,omitempty"`
+	LocalAssociation    string `json:"localAssociation,omitempty"`
+	Function            string `json:"function,omitempty"`
+	Number              string `json:"number,omitempty"`
+}
+
+// Fields returns pointers to all parts, for validation.
+func (n *TacticalName) Fields() []*string {
+	return []*string{
+		&n.Organisation, &n.RegionalAssociation, &n.LocalAssociation, &n.Function, &n.Number,
 	}
 }
 

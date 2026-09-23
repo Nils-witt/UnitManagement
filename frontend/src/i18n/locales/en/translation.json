@@ -134,5 +134,13 @@
     "verwaltungsstufe": "Administrative level",
     "funktion": "Function",
     "symbol": "Symbol"
+  },
+  "tacticalName": {
+    "title": "Tactical name",
+    "organisation": "Organization",
+    "regionalAssociation": "Regional association",
+    "localAssociation": "Local association",
+    "function": "Function",
+    "number": "Number"
   }
 }

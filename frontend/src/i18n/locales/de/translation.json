@@ -134,5 +134,13 @@
     "verwaltungsstufe": "Verwaltungsstufe",
     "funktion": "Funktion",
     "symbol": "Symbol"
+  },
+  "tacticalName": {
+    "title": "Taktischer Name",
+    "organisation": "Organisation",
+    "regionalAssociation": "Kreisverband",
+    "localAssociation": "Ortsverband",
+    "function": "Funktion",
+    "number": "Nummer"
   }
 }

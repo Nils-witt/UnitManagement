@@ -379,7 +379,7 @@ paths:
     put:
       tags: [units]
       summary: Update a unit
-      description: Replaces the unit's name, position and symbol; a missing or null position or symbol clears it.
+      description: Replaces the unit's name, position, symbol and tactical name; a missing or null position, symbol or tactical name clears it.
       operationId: updateUnit
       requestBody:
         required: true
@@ -658,6 +658,40 @@ components:
           oneOf:
             - $ref: "#/components/schemas/UnitSymbol"
             - type: "null"
+        tacticalName:
+          description: A missing or null tactical name, or one without parts, clears it.
+          oneOf:
+            - $ref: "#/components/schemas/TacticalName"
+            - type: "null"
+
+    TacticalName:
+      type: object
+      description: >
+        The unit's radio call sign, split into its parts, e.g. "Rotkreuz
+        Musterstadt 12/83-1". Surrounding whitespace is trimmed and empty parts
+        are omitted.
+      properties:
+        organisation:
+          $ref: "#/components/schemas/TacticalNamePart"
+        regionalAssociation:
+          $ref: "#/components/schemas/TacticalNamePart"
+        localAssociation:
+          $ref: "#/components/schemas/TacticalNamePart"
+        function:
+          $ref: "#/components/schemas/TacticalNamePart"
+        number:
+          $ref: "#/components/schemas/TacticalNamePart"
+      example:
+        organisation: Rotkreuz
+        regionalAssociation: Musterstadt
+        localAssociation: "12"
+        function: "83"
+        number: "1"
+
+    TacticalNamePart:
+      type: string
+      maxLength: 32
+      description: Must not contain control characters.
 
     UnitSymbol:
       type: object
@@ -694,7 +728,17 @@ components:
     Unit:
       type: object
       required:
-        [id, name, position, symbol, createdAt, updatedAt, createdBy, updatedBy]
+        [
+          id,
+          name,
+          position,
+          symbol,
+          tacticalName,
+          createdAt,
+          updatedAt,
+          createdBy,
+          updatedBy,
+        ]
       properties:
         id:
           type: string
@@ -708,6 +752,10 @@ components:
         symbol:
           oneOf:
             - $ref: "#/components/schemas/UnitSymbol"
+            - type: "null"
+        tacticalName:
+          oneOf:
+            - $ref: "#/components/schemas/TacticalName"
             - type: "null"
         createdAt:
           type: string

@@ -64,11 +64,21 @@ export type UnitSymbol = Pick<
   | 'symbol'
 >;
 
+/** A radio call sign split into its parts, e.g. "Rotkreuz Musterstadt 12/83-1". */
+export interface TacticalName {
+  organisation?: string;
+  regionalAssociation?: string;
+  localAssociation?: string;
+  function?: string;
+  number?: string;
+}
+
 export interface Unit {
   id: string;
   name: string;
   position: Position | null;
   symbol: UnitSymbol | null;
+  tacticalName: TacticalName | null;
   createdAt: string;
   updatedAt: string;
   createdBy: UserRef | null;
@@ -81,6 +91,8 @@ export interface UnitInput {
   position: (Omit<Position, 'timestamp'> & { timestamp?: string }) | null;
   /** Null clears the symbol. */
   symbol: UnitSymbol | null;
+  /** Null clears the tactical name. */
+  tacticalName: TacticalName | null;
 }
 
 /** A message on the unit event stream (GET /api/units/events). */

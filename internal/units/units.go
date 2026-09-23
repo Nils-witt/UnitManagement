@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -17,14 +18,18 @@ import (
 	"go-unit-mangement/internal/models"
 )
 
-const MaxNameLength = 64
+const (
+	MaxNameLength             = 64
+	MaxTacticalNamePartLength = 32
+)
 
 var (
-	ErrUnitNotFound    = errors.New("unit not found")
-	ErrNameTaken       = errors.New("unit name is already taken")
-	ErrInvalidName     = fmt.Errorf("unit name must be 1 to %d characters", MaxNameLength)
-	ErrInvalidPosition = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, and height finite")
-	ErrInvalidSymbol   = errors.New("symbol components must be IDs of lowercase letters, digits and dashes")
+	ErrUnitNotFound        = errors.New("unit not found")
+	ErrNameTaken           = errors.New("unit name is already taken")
+	ErrInvalidName         = fmt.Errorf("unit name must be 1 to %d characters", MaxNameLength)
+	ErrInvalidPosition     = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, and height finite")
+	ErrInvalidSymbol       = errors.New("symbol components must be IDs of lowercase letters, digits and dashes")
+	ErrInvalidTacticalName = fmt.Errorf("tactical name parts must be at most %d characters without control characters", MaxTacticalNamePartLength)
 )
 
 // symbolIDPattern matches the component IDs of @taktische-zeichen/core. The
@@ -40,12 +45,13 @@ type Position struct {
 	Timestamp time.Time
 }
 
-// Input holds the editable fields of a unit. A nil Position or Symbol clears
-// it, as does a Symbol without any components.
+// Input holds the editable fields of a unit. A nil Position, Symbol or
+// TacticalName clears it, as does a Symbol or TacticalName without any parts.
 type Input struct {
-	Name     string
-	Position *Position
-	Symbol   *models.UnitSymbol
+	Name         string
+	Position     *Position
+	Symbol       *models.UnitSymbol
+	TacticalName *models.TacticalName
 }
 
 type Service struct {
@@ -160,6 +166,12 @@ func apply(unit *models.Unit, in Input) error {
 	}
 	unit.Symbol = symbol
 
+	tacticalName, err := normalizeTacticalName(in.TacticalName)
+	if err != nil {
+		return err
+	}
+	unit.TacticalName = tacticalName
+
 	if in.Position == nil {
 		unit.Latitude, unit.Longitude, unit.Height, unit.PositionTimestamp = nil, nil, nil, nil
 		return nil
@@ -189,6 +201,30 @@ func normalizeSymbol(s *models.UnitSymbol) (*models.UnitSymbol, error) {
 		}
 		if !symbolIDPattern.MatchString(*f) {
 			return nil, ErrInvalidSymbol
+		}
+		empty = false
+	}
+	if empty {
+		return nil, nil
+	}
+	return &out, nil
+}
+
+// normalizeTacticalName validates n and returns a trimmed copy, or nil when it
+// has no parts.
+func normalizeTacticalName(n *models.TacticalName) (*models.TacticalName, error) {
+	if n == nil {
+		return nil, nil
+	}
+	out := *n
+	empty := true
+	for _, f := range out.Fields() {
+		*f = strings.TrimSpace(*f)
+		if *f == "" {
+			continue
+		}
+		if utf8.RuneCountInString(*f) > MaxTacticalNamePartLength || strings.ContainsFunc(*f, unicode.IsControl) {
+			return nil, ErrInvalidTacticalName
 		}
 		empty = false
 	}

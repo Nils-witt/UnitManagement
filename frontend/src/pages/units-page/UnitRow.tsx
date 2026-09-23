@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { Unit } from '../../api/types';
 import UnitSymbolIcon from '../../components/UnitSymbolIcon';
 import { fmtDate } from '../../lib/format';
+import { formatTacticalName } from '../../lib/tacticalName';
 import './UnitRow.scss';
 
 export default function UnitRow({
@@ -16,12 +17,20 @@ export default function UnitRow({
 }) {
   const { t, i18n } = useTranslation();
   const p = u.position;
+  const tacticalName = formatTacticalName(u.tacticalName);
   return (
     <TableRow hover>
       <TableCell>
         <Stack direction="row" spacing={1.5} className="unit-row__name">
           <UnitSymbolIcon symbol={u.symbol} />
-          <span>{u.name}</span>
+          <div>
+            {u.name}
+            {tacticalName && (
+              <Typography variant="caption" color="text.secondary" component="div">
+                {tacticalName}
+              </Typography>
+            )}
+          </div>
         </Stack>
       </TableCell>
       <TableCell>

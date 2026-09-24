@@ -69,9 +69,13 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | DELETE | `/api/users/{id}`  | Delete user (admin)                  |
 | GET    | `/api/groups`      | List groups with members (admin)     |
 | GET    | `/api/units`       | List units                           |
-| POST   | `/api/units`       | `{name, position?: {lat, lon, height?, timestamp?}}` |
+| POST   | `/api/units`       | `{name, position?: {lat, lon, height?, timestamp?}, symbol?, tacticalName?}` |
 | GET    | `/api/units/events` | WebSocket pushing `{type, id, unit?}` on every unit create/update/delete |
 | GET    | `/api/units/{id}`  | Get unit by UUID                     |
+| GET    | `/api/units/{id}/positions?limit=` | Position history, newest first |
 | PUT    | `/api/units/{id}`  | Same body as POST; a missing position clears it |
+| PATCH  | `/api/units/{id}`  | Changes only the fields sent; null clears |
 | DELETE | `/api/units/{id}`  | Delete unit                          |
+| GET    | `/api/version`     | `{commit, version?}`: build info     |
+| GET    | `/api/instance`    | `{name?}`: instance name             |
 | GET    | `/api/health`      | Health check                         |

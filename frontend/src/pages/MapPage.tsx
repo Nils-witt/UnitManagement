@@ -82,15 +82,16 @@ const TRACK_POINTS_LAYER = `${TRACK_SOURCE}-points`;
 // Including the stroke; also the popup's offset and the extra hit area.
 const TRACK_POINT_RADIUS = 6;
 
-// How far back the track reaches, in hours; null shows all of it (as far as
+// How far back the track reaches, in minutes; null shows all of it (as far as
 // the server returns, the latest 1000 positions), 'custom' a timeframe the
 // user enters.
-const TRACK_SPANS = [1, 6, 24, 24 * 7, null, 'custom'] as const;
+const TRACK_SPANS = [5, 15, 30, 60, 6 * 60, 24 * 60, 7 * 24 * 60, null, 'custom'] as const;
 type TrackSpan = (typeof TRACK_SPANS)[number];
 type PresetSpan = Exclude<TrackSpan, 'custom'>;
-const DEFAULT_TRACK_SPAN = 1 satisfies PresetSpan;
-const TRACK_SPAN_KEY = 'map.trackSpan';
-const HOUR_MS = 3_600_000;
+const DEFAULT_TRACK_SPAN = 60 satisfies PresetSpan;
+// Not 'map.trackSpan', which held hours.
+const TRACK_SPAN_KEY = 'map.trackSpanMinutes';
+const MINUTE_MS = 60_000;
 
 /** A custom timeframe, as values of datetime-local inputs (local time); an
  * empty one leaves that end open. */
@@ -252,7 +253,7 @@ export default function MapPage() {
     ? rangeSince
     : trackSpan === null
       ? null
-      : new Date(fetchedAt - trackSpan * HOUR_MS).toISOString();
+      : new Date(fetchedAt - trackSpan * MINUTE_MS).toISOString();
   const { data: history, error: trackError } = useUnitPositions(
     rangeInvalid ? null : (trackUnit?.id ?? null),
     since,
@@ -265,7 +266,7 @@ export default function MapPage() {
   }, [trackId, trackSpan]);
   const track = useMemo(() => {
     if (trackSpan === null || trackSpan === 'custom') return history;
-    const cutoff = now - trackSpan * HOUR_MS;
+    const cutoff = now - trackSpan * MINUTE_MS;
     return history.filter((p) => Date.parse(p.timestamp) >= cutoff);
   }, [history, trackSpan, now]);
 
@@ -279,8 +280,8 @@ export default function MapPage() {
     if (span === 'custom') {
       // Starts from the timeframe shown so far, then the user adjusts it.
       const time = Date.now();
-      const hours = typeof trackSpan === 'number' ? trackSpan : DEFAULT_TRACK_SPAN;
-      setTrackRange({ from: toLocalInput(time - hours * HOUR_MS), to: toLocalInput(time) });
+      const minutes = typeof trackSpan === 'number' ? trackSpan : DEFAULT_TRACK_SPAN;
+      setTrackRange({ from: toLocalInput(time - minutes * MINUTE_MS), to: toLocalInput(time) });
     } else {
       resetClock();
       saveTrackSpan(span);
@@ -419,9 +420,11 @@ export default function MapPage() {
                   ? t('map.spanCustom')
                   : span === null
                     ? t('map.spanAll')
-                    : span < 24
-                      ? t('map.spanHours', { count: span })
-                      : t('map.spanDays', { count: span / 24 })}
+                    : span < 60
+                      ? t('map.spanMinutes', { count: span })
+                      : span < 24 * 60
+                        ? t('map.spanHours', { count: span / 60 })
+                        : t('map.spanDays', { count: span / (24 * 60) })}
               </MenuItem>
             ))}
           </TextField>

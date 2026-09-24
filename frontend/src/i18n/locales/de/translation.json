@@ -206,6 +206,8 @@
     "historyOf_other": "GPS-Verlauf von {{name}}: {{count}} Positionen",
     "historySpan": "Zeitraum",
     "spanAll": "Alle",
+    "spanMinutes_one": "Letzte Minute",
+    "spanMinutes_other": "Letzte {{count}} Minuten",
     "spanHours_one": "Letzte Stunde",
     "spanHours_other": "Letzte {{count}} Stunden",
     "spanDays_one": "Letzter Tag",

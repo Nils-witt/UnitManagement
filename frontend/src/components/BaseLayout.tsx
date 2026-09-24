@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import Footer from './Footer.tsx';
 import LanguageSwitcher from './LanguageSwitcher.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
+import { useInstanceName } from '../hooks/useInstanceName.ts';
 import './BaseLayout.scss';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useState, type MouseEvent } from 'react';
@@ -22,6 +23,7 @@ import { ROUTES } from '../routes.ts';
 
 export default function BaseLayout() {
   const { t } = useTranslation();
+  const instanceName = useInstanceName();
   const { user, logout } = useAuth();
   const [anchorElNav, setAnchorElNav] = useState<null | HTMLElement>(null);
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
@@ -104,7 +106,7 @@ export default function BaseLayout() {
               to={ROUTES.home}
               className="base-layout__brand"
             >
-              {t('app.name')}
+              {instanceName}
             </Typography>
 
             <Box className="base-layout__nav">

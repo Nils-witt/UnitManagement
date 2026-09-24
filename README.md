@@ -43,6 +43,8 @@ Try a local build without publishing with `goreleaser release --snapshot --clean
 
 See `.env.example`. Set `COOKIE_SECURE=true` when serving over HTTPS.
 
+Set `INSTANCE_NAME` to label the deployment (e.g. `Kreis Nord`); it replaces the product name in the page title, header and login page.
+
 Behind a reverse proxy, set `TRUSTED_PROXIES` to its addresses (comma-separated IPs or CIDRs, e.g. `10.0.0.0/8,::1`) so logs show the real client IP. For requests from those addresses the client is taken from `X-Forwarded-For` (the rightmost entry that isn't a trusted proxy) or `X-Real-IP`; the headers are ignored from anyone else, so they can't be spoofed.
 
 ## API

@@ -19,6 +19,10 @@ type Config struct {
 	SessionTTL   time.Duration
 	CookieSecure bool
 
+	// InstanceName labels this deployment in the UI (page title, header,
+	// login page). Empty means the UI shows the product name.
+	InstanceName string
+
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For and
 	// X-Real-IP headers are believed. Empty means the headers are ignored.
 	TrustedProxies []netip.Prefix
@@ -54,6 +58,7 @@ func Load() (*Config, error) {
 		DatabaseURL:    getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
 		SessionTTL:     ttl,
 		CookieSecure:   secure,
+		InstanceName:   strings.TrimSpace(os.Getenv("INSTANCE_NAME")),
 		TrustedProxies: proxies,
 		AdminUsername:  getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:  os.Getenv("ADMIN_PASSWORD"),

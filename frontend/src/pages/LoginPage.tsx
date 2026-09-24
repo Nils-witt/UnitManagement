@@ -17,6 +17,7 @@ import { ApiError } from '../api/ApiClient';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../hooks/useAuth';
 import { useAuthMethods } from '../hooks/useAuthMethods';
+import { useInstanceName } from '../hooks/useInstanceName';
 import Footer from '../components/Footer';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import './LoginPage.scss';
@@ -37,6 +38,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const api = useApi();
   const authMethods = useAuthMethods();
+  const instanceName = useInstanceName();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [username, setUsername] = useState('');
@@ -98,7 +100,7 @@ export default function LoginPage() {
       <Container maxWidth="xs" disableGutters>
         <Paper elevation={3}>
           <Typography variant="h5" component="h1" gutterBottom sx={{ textAlign: 'center' }}>
-            {t('app.name')}
+            {instanceName}
           </Typography>
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>

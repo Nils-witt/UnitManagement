@@ -79,6 +79,7 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("DELETE /api/units/{id}", authed(s.handleDeleteUnit))
 
 	mux.HandleFunc("GET /api/version", s.handleVersion)
+	mux.HandleFunc("GET /api/instance", s.handleInstance)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})

@@ -31,6 +31,11 @@ export interface UpdateUserInput {
 }
 
 /** A user referenced by a record; the record keeps null once they're deleted. */
+export interface InstanceInfo {
+  /** Name of this deployment; absent when not configured. */
+  name?: string;
+}
+
 export interface VersionInfo {
   /** The release tag; absent for untagged builds. */
   version?: string;

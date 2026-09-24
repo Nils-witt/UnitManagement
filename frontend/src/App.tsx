@@ -1,12 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { CssBaseline, StyledEngineProvider, ThemeProvider, useMediaQuery } from '@mui/material';
-import { useTranslation } from 'react-i18next';
 import { AuthProvider } from './contexts/AuthProvider';
 import ProtectedRoute from './auth/ProtectedRoute';
 import AdminOnlyRoute from './auth/AdminOnlyRoute';
 import RouteFallback from './components/RouteFallback';
+import DocumentTitle from './components/DocumentTitle';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { createAppTheme } from './theme';
@@ -24,17 +24,12 @@ const UnitsPage = lazy(() => import('./pages/UnitsPage.tsx'));
 const MapPage = lazy(() => import('./pages/MapPage.tsx'));
 
 export default function App() {
-  const { t } = useTranslation();
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)', { noSsr: true });
   const [queryClient] = useState(createQueryClient);
   const theme = useMemo(
     () => createAppTheme(prefersDarkMode ? 'dark' : 'light'),
     [prefersDarkMode],
   );
-
-  useEffect(() => {
-    document.title = t('app.name');
-  }, [t]);
 
   // injectFirst puts MUI's styles before the component .scss files in the
   // cascade, so a plain single-class selector there wins over MUI's defaults.
@@ -46,6 +41,7 @@ export default function App() {
           <ConfirmProvider>
             <AuthProvider>
               <ApiProvider>
+                <DocumentTitle />
                 <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     <Route path={ROUTE_SEGMENTS.login} element={<LoginPage />} />

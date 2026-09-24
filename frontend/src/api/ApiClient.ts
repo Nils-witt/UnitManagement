@@ -8,6 +8,7 @@
 import type {
   AuthMethods,
   CreateUserInput,
+  InstanceInfo,
   PositionHistoryEntry,
   Unit,
   UnitInput,
@@ -119,6 +120,11 @@ export class ApiClient {
   /** GET /api/version. Public, so the login page footer can show it too. */
   getVersion(): Promise<VersionInfo> {
     return this.getJson('/api/version');
+  }
+
+  /** GET /api/instance. Public, so the login page can show the name too. */
+  getInstance(): Promise<InstanceInfo> {
+    return this.getJson('/api/instance');
   }
 
   // ---- users (administrators only) ----------------------------------------

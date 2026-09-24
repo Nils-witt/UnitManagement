@@ -231,11 +231,11 @@ func (s *Service) LoginOIDC(ctx context.Context, id OIDCIdentity) (string, *mode
 	if err := s.syncOIDCGroups(ctx, user, id); err != nil {
 		return "", nil, time.Time{}, err
 	}
-	token, expires, err := s.createSession(ctx, user.ID)
+	session, err := s.createSession(ctx, models.Session{UserID: user.ID}, s.sessionTTL)
 	if err != nil {
 		return "", nil, time.Time{}, err
 	}
-	return token, user, expires, nil
+	return session.token, user, session.ExpiresAt, nil
 }
 
 // syncOIDCGroups makes the user a member of exactly the provider's groups,

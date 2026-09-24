@@ -78,6 +78,31 @@
     "editTitle": "Edit {{name}}",
     "newTitle": "New user"
   },
+  "tokenDialog": {
+    "title": "API tokens of {{name}}",
+    "info": "API tokens sign in as {{name}} until they expire or are revoked. They also stop working when the user is deleted or their password is changed.",
+    "newToken": "New token",
+    "nameLabel": "Name",
+    "nameHint": "E.g. the device using it",
+    "ttlLabel": "Valid for",
+    "ttlHint": "1 minute to 10 years",
+    "unitLabel": "Unit",
+    "hours": "Hours",
+    "days": "Days",
+    "created": "Created",
+    "expires": "Expires",
+    "empty": "No API tokens",
+    "revoke": "Revoke",
+    "revokeAria": "Revoke token {{name}}",
+    "revokeTitle": "Revoke token",
+    "revokeMessage": "Revoke token \"{{name}}\"? It stops working immediately.",
+    "tokenLabel": "Token",
+    "expiresAt": "Expires {{date}}",
+    "shownOnce": "Token \"{{name}}\" was created. Copy it now; it is not shown again.",
+    "copy": "Copy token",
+    "copied": "Copied",
+    "copyFailed": "Could not copy to the clipboard. Select the token and copy it manually."
+  },
   "userRow": {
     "you": "you",
     "sso": "SSO",
@@ -86,7 +111,9 @@
     "user": "User",
     "cantDeleteSelf": "You can't delete your own account",
     "editAria": "Edit {{name}}",
-    "deleteAria": "Delete {{name}}"
+    "deleteAria": "Delete {{name}}",
+    "createToken": "API tokens",
+    "createTokenAria": "Manage API tokens of {{name}}"
   },
   "usersListCard": {
     "signIn": "Sign-in",

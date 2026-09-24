@@ -7,8 +7,11 @@
 
 import { getToken } from './tokenStore';
 import type {
+  ApiToken,
   AuthMethods,
+  CreateTokenInput,
   CreateUserInput,
+  CreatedApiToken,
   Group,
   InstanceInfo,
   LoginResponse,
@@ -151,6 +154,20 @@ export class ApiClient {
 
   deleteUser(id: number): Promise<void> {
     return this.del(`/api/users/${id}`);
+  }
+
+  /** The user's unexpired API tokens, newest first. */
+  listUserTokens(id: number): Promise<ApiToken[]> {
+    return this.getJson(`/api/users/${id}/tokens`);
+  }
+
+  /** Issues an access token in the user's name; the token is only returned here. */
+  createUserToken(id: number, input: CreateTokenInput): Promise<CreatedApiToken> {
+    return this.sendJsonForJson(`/api/users/${id}/tokens`, 'POST', input);
+  }
+
+  revokeUserToken(id: number, tokenId: number): Promise<void> {
+    return this.del(`/api/users/${id}/tokens/${tokenId}`);
   }
 
   // ---- groups (administrators only) ---------------------------------------

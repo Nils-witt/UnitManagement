@@ -43,6 +43,28 @@ export interface UpdateUserInput {
   password: string;
 }
 
+export interface CreateTokenInput {
+  /** Identifies the token, e.g. the device using it; 1 to 64 characters. */
+  name: string;
+  /** How long the token is valid, 60 seconds to 10 years. */
+  ttlSeconds: number;
+}
+
+/** An API token issued by an administrator; its value is not kept. */
+export interface ApiToken {
+  id: number;
+  name: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** Result of POST /api/users/{id}/tokens: the only time the value is returned. */
+export interface CreatedApiToken extends ApiToken {
+  /** Access token, sent as `Authorization: Bearer <token>`. */
+  token: string;
+  tokenType: 'Bearer';
+}
+
 /** A user referenced by a record; the record keeps null once they're deleted. */
 export interface InstanceInfo {
   /** Name of this deployment; absent when not configured. */

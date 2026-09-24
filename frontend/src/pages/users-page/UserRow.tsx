@@ -8,11 +8,13 @@ export default function UserRow({
   u,
   self,
   onEdit,
+  onCreateToken,
   onDelete,
 }: {
   u: User;
   self: boolean;
   onEdit: () => void;
+  onCreateToken: () => void;
   onDelete: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -51,6 +53,13 @@ export default function UserRow({
             aria-label={t('userRow.editAria', { name: u.username })}
           >
             {t('common.edit')}
+          </Button>
+          <Button
+            size="small"
+            onClick={onCreateToken}
+            aria-label={t('userRow.createTokenAria', { name: u.username })}
+          >
+            {t('userRow.createToken')}
           </Button>
           <Button
             size="small"

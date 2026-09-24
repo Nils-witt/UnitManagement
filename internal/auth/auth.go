@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -25,6 +26,17 @@ var (
 	// ErrAdminPasswordRequired means no administrator exists and there is no
 	// ADMIN_PASSWORD to create one with.
 	ErrAdminPasswordRequired = errors.New("no administrator exists: set ADMIN_PASSWORD to create the ADMIN_USERNAME account")
+	ErrInvalidTokenTTL       = fmt.Errorf("token lifetime must be between %s and %s", MinTokenTTL, MaxTokenTTL)
+	ErrInvalidTokenName      = fmt.Errorf("token name must be 1 to %d characters", MaxTokenNameLength)
+	ErrTokenNotFound         = errors.New("token not found")
+)
+
+// Bounds of an API token's lifetime (see CreateToken).
+const (
+	MinTokenTTL = time.Minute
+	MaxTokenTTL = 10 * 365 * 24 * time.Hour
+
+	MaxTokenNameLength = 64
 )
 
 // dummyHash is compared against when a username does not exist, so that
@@ -113,37 +125,94 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 		return "", nil, time.Time{}, ErrInvalidCredentials
 	}
 
-	token, expires, err := s.createSession(ctx, user.ID)
+	session, err := s.createSession(ctx, models.Session{UserID: user.ID}, s.sessionTTL)
 	if err != nil {
 		return "", nil, time.Time{}, err
 	}
-	return token, &user, expires, nil
+	return session.token, &user, session.ExpiresAt, nil
 }
 
-// createSession stores a new session and returns an access token for it.
-// The token's "jti" is the session's random ID, of which only a hash is
-// stored, so a database leak does not expose live sessions.
-func (s *Service) createSession(ctx context.Context, userID uint) (string, time.Time, error) {
+// CreateToken issues a named access token for the user with id that is
+// valid for ttl, e.g. for a device or integration acting as that user. It
+// ends when it is revoked (RevokeToken), the user is deleted or their
+// password is changed.
+func (s *Service) CreateToken(ctx context.Context, id uint, name string, ttl time.Duration) (string, *models.Session, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || utf8.RuneCountInString(name) > MaxTokenNameLength {
+		return "", nil, ErrInvalidTokenName
+	}
+	if ttl < MinTokenTTL || ttl > MaxTokenTTL {
+		return "", nil, ErrInvalidTokenTTL
+	}
+	user, err := s.GetUser(ctx, id)
+	if err != nil {
+		return "", nil, err
+	}
+	session, err := s.createSession(ctx, models.Session{UserID: user.ID, APIToken: true, Name: name}, ttl)
+	if err != nil {
+		return "", nil, err
+	}
+	session.User = *user
+	return session.token, &session.Session, nil
+}
+
+// ListTokens returns the user's unexpired API tokens, newest first. Their
+// token values are not stored, so only the metadata can be listed.
+func (s *Service) ListTokens(ctx context.Context, userID uint) ([]models.Session, error) {
+	if _, err := s.GetUser(ctx, userID); err != nil {
+		return nil, err
+	}
+	var tokens []models.Session
+	err := s.db.WithContext(ctx).
+		Where("user_id = ? AND api_token AND expires_at > ?", userID, time.Now()).
+		Order("created_at DESC, id DESC").
+		Find(&tokens).Error
+	if err != nil {
+		return nil, fmt.Errorf("list tokens of user %d: %w", userID, err)
+	}
+	return tokens, nil
+}
+
+// RevokeToken ends the user's API token with tokenID. Sign-in sessions
+// can't be revoked this way.
+func (s *Service) RevokeToken(ctx context.Context, userID, tokenID uint) error {
+	res := s.db.WithContext(ctx).Where("user_id = ? AND api_token", userID).Delete(&models.Session{}, tokenID)
+	if res.Error != nil {
+		return fmt.Errorf("revoke token %d: %w", tokenID, res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return ErrTokenNotFound
+	}
+	return nil
+}
+
+// newSession is a stored session together with its access token.
+type newSession struct {
+	models.Session
+	token string
+}
+
+// createSession stores session, valid for ttl from now, and returns it with
+// an access token. The token's "jti" is the session's random ID, of which
+// only a hash is stored, so a database leak does not expose live sessions.
+func (s *Service) createSession(ctx context.Context, session models.Session, ttl time.Duration) (*newSession, error) {
 	sessionID, err := newSessionID()
 	if err != nil {
-		return "", time.Time{}, err
+		return nil, err
 	}
 	now := time.Now()
-	session := models.Session{
-		TokenHash: hashToken(sessionID),
-		UserID:    userID,
-		// JWT times have second precision; truncating keeps the token's
-		// expiry and the session's in step.
-		ExpiresAt: now.Add(s.sessionTTL).Truncate(time.Second),
-	}
-	token, err := s.tokens.sign(sessionID, userID, now, session.ExpiresAt)
+	session.TokenHash = hashToken(sessionID)
+	// JWT times have second precision; truncating keeps the token's expiry
+	// and the session's in step.
+	session.ExpiresAt = now.Add(ttl).Truncate(time.Second)
+	token, err := s.tokens.sign(sessionID, session.UserID, now, session.ExpiresAt)
 	if err != nil {
-		return "", time.Time{}, err
+		return nil, err
 	}
 	if err := s.db.WithContext(ctx).Create(&session).Error; err != nil {
-		return "", time.Time{}, fmt.Errorf("create session: %w", err)
+		return nil, fmt.Errorf("create session: %w", err)
 	}
-	return token, session.ExpiresAt, nil
+	return &newSession{Session: session, token: token}, nil
 }
 
 // Logout ends the session of an access token. A token that is invalid or

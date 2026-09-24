@@ -288,6 +288,99 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/users/{id}/tokens:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [users]
+      summary: List a user's API tokens
+      description: >-
+        The user's unexpired API tokens, newest first. Sign-in sessions are
+        not included, and token values are never returned again.
+      operationId: listUserTokens
+      responses:
+        "200":
+          description: The user's API tokens.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [users]
+      summary: Create an API token for a user
+      description: |
+        Issues a named access token that authenticates as the user until it
+        expires, e.g. for a device or integration. The lifetime is chosen
+        freely between one minute and ten years. The token ends early when it
+        is revoked, the user is deleted or their password is changed. Its
+        value is only returned in this response.
+      operationId: createUserToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTokenRequest"
+      responses:
+        "201":
+          description: The token was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedApiToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/users/{id}/tokens/{tokenId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+      - name: tokenId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    delete:
+      tags: [users]
+      summary: Revoke an API token
+      description: The token stops working immediately.
+      operationId: revokeUserToken
+      responses:
+        "204":
+          description: The token was revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No such API token for this user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: token not found
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/groups:
     get:
       tags: [groups]
@@ -771,6 +864,51 @@ components:
         password:
           type: string
           description: New password (at least 8 characters). Empty or missing keeps the current one.
+
+    CreateTokenRequest:
+      type: object
+      required: [name, ttlSeconds]
+      properties:
+        name:
+          type: string
+          description: Identifies the token, e.g. the device using it. Surrounding whitespace is trimmed.
+          minLength: 1
+          maxLength: 64
+        ttlSeconds:
+          type: integer
+          description: How long the token is valid, in seconds.
+          minimum: 60
+          maximum: 315360000
+          example: 2592000
+
+    ApiToken:
+      type: object
+      required: [id, name, createdAt, expiresAt]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+
+    CreatedApiToken:
+      allOf:
+        - $ref: "#/components/schemas/ApiToken"
+        - type: object
+          required: [token, tokenType]
+          properties:
+            token:
+              type: string
+              description: "JWT access token, sent as `Authorization: Bearer <token>`. Only returned here."
+            tokenType:
+              type: string
+              const: Bearer
 
     GroupRef:
       type: object

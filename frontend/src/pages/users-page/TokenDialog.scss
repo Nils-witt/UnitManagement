@@ -1,0 +1,27 @@
+.token-dialog__content {
+  padding-top: 8px;
+}
+
+.token-dialog__fields {
+  flex-wrap: wrap;
+}
+
+.token-dialog__amount {
+  width: 140px;
+}
+
+.token-dialog__unit {
+  min-width: 120px;
+}
+
+.token-dialog__token {
+  align-items: flex-start;
+}
+
+.token-dialog__token-input {
+  font-family: monospace;
+}
+
+.token-dialog__actions {
+  justify-content: flex-end;
+}

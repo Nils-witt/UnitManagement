@@ -69,6 +69,9 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("POST /api/users", admin(s.handleCreateUser))
 	mux.Handle("PUT /api/users/{id}", admin(s.handleUpdateUser))
 	mux.Handle("DELETE /api/users/{id}", admin(s.handleDeleteUser))
+	mux.Handle("GET /api/users/{id}/tokens", admin(s.handleListTokens))
+	mux.Handle("POST /api/users/{id}/tokens", admin(s.handleCreateToken))
+	mux.Handle("DELETE /api/users/{id}/tokens/{tokenId}", admin(s.handleRevokeToken))
 	mux.Handle("GET /api/groups", admin(s.handleListGroups))
 
 	mux.Handle("GET /api/units", authed(s.handleListUnits))

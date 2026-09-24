@@ -10,6 +10,7 @@ import { useConfirm } from '../hooks/useConfirm';
 import { useUsers } from '../hooks/useUsers';
 import { errorMessage } from '../lib/errors';
 import type { SortDirection } from '../lib/sort';
+import TokenDialog from './users-page/TokenDialog';
 import UserDialog, { type UserFormValues } from './users-page/UserDialog';
 import UsersListCard from './users-page/UsersListCard';
 import { filterUsers, sortUsers, type UserSortKey } from './users-page/userSort';
@@ -29,6 +30,8 @@ export default function UsersPage() {
   // flip to "new user" during the exit animation.
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [tokenUser, setTokenUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const visibleUsers = useMemo(
@@ -58,6 +61,11 @@ export default function UsersPage() {
       await api.createUser({ username, password, isAdmin });
     }
     await reloadUsers();
+  };
+
+  const openTokenDialog = (user: User) => {
+    setTokenUser(user);
+    setTokenDialogOpen(true);
   };
 
   const onDelete = async (u: User) => {
@@ -99,6 +107,7 @@ export default function UsersPage() {
         sortDirection={sortDirection}
         onSort={onSort}
         onEdit={openDialog}
+        onCreateToken={openTokenDialog}
         onDelete={(u) => void onDelete(u)}
       />
       <UserDialog
@@ -107,6 +116,11 @@ export default function UsersPage() {
         self={editingUser != null && editingUser.id === currentUser?.id}
         onClose={() => setDialogOpen(false)}
         onSubmit={onSubmit}
+      />
+      <TokenDialog
+        open={tokenDialogOpen}
+        user={tokenUser}
+        onClose={() => setTokenDialogOpen(false)}
       />
     </Box>
   );

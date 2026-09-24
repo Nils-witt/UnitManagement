@@ -59,6 +59,10 @@ type Session struct {
 	UserID    uint      `gorm:"index;not null"`
 	User      User      `gorm:"constraint:OnDelete:CASCADE"`
 	ExpiresAt time.Time `gorm:"index;not null"`
+	// APIToken marks sessions an administrator issued (see
+	// auth.Service.CreateToken) rather than sign-ins; only those have a Name.
+	APIToken  bool   `gorm:"not null;default:false"`
+	Name      string `gorm:"not null;default:''"`
 	CreatedAt time.Time
 }
 

@@ -78,6 +78,31 @@
     "editTitle": "{{name}} bearbeiten",
     "newTitle": "Neuer Benutzer"
   },
+  "tokenDialog": {
+    "title": "API-Tokens von {{name}}",
+    "info": "API-Tokens melden sich als {{name}} an, bis sie ablaufen oder widerrufen werden. Sie werden außerdem ungültig, wenn der Benutzer gelöscht oder sein Passwort geändert wird.",
+    "newToken": "Neues Token",
+    "nameLabel": "Name",
+    "nameHint": "Z. B. das Gerät, das es verwendet",
+    "ttlLabel": "Gültig für",
+    "ttlHint": "1 Minute bis 10 Jahre",
+    "unitLabel": "Einheit",
+    "hours": "Stunden",
+    "days": "Tage",
+    "created": "Erstellt",
+    "expires": "Läuft ab",
+    "empty": "Keine API-Tokens",
+    "revoke": "Widerrufen",
+    "revokeAria": "Token {{name}} widerrufen",
+    "revokeTitle": "Token widerrufen",
+    "revokeMessage": "Token „{{name}}“ widerrufen? Es wird sofort ungültig.",
+    "tokenLabel": "Token",
+    "expiresAt": "Läuft ab am {{date}}",
+    "shownOnce": "Token „{{name}}“ wurde erstellt. Kopieren Sie es jetzt; es wird nicht erneut angezeigt.",
+    "copy": "Token kopieren",
+    "copied": "Kopiert",
+    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen. Markieren und kopieren Sie das Token manuell."
+  },
   "userRow": {
     "you": "Sie",
     "sso": "SSO",
@@ -86,7 +111,9 @@
     "user": "Benutzer",
     "cantDeleteSelf": "Sie können Ihr eigenes Konto nicht löschen",
     "editAria": "{{name}} bearbeiten",
-    "deleteAria": "{{name}} löschen"
+    "deleteAria": "{{name}} löschen",
+    "createToken": "API-Tokens",
+    "createTokenAria": "API-Tokens von {{name}} verwalten"
   },
   "usersListCard": {
     "signIn": "Anmeldung",

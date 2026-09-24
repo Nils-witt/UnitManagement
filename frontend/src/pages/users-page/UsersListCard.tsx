@@ -22,6 +22,7 @@ export default function UsersListCard({
   sortDirection,
   onSort,
   onEdit,
+  onCreateToken,
   onDelete,
 }: {
   users: User[];
@@ -31,6 +32,7 @@ export default function UsersListCard({
   sortDirection: SortDirection;
   onSort: (key: UserSortKey) => void;
   onEdit: (u: User) => void;
+  onCreateToken: (u: User) => void;
   onDelete: (u: User) => void;
 }) {
   const { t } = useTranslation();
@@ -67,6 +69,7 @@ export default function UsersListCard({
               u={u}
               self={u.id === currentUserId}
               onEdit={() => onEdit(u)}
+              onCreateToken={() => onCreateToken(u)}
               onDelete={() => onDelete(u)}
             />
           ))}

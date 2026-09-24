@@ -3,9 +3,11 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"go-unit-mangement/internal/auth"
@@ -16,6 +18,10 @@ type Config struct {
 	DatabaseURL  string
 	SessionTTL   time.Duration
 	CookieSecure bool
+
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For and
+	// X-Real-IP headers are believed. Empty means the headers are ignored.
+	TrustedProxies []netip.Prefix
 
 	// Initial admin account, created on startup if no users exist yet.
 	AdminUsername string
@@ -38,13 +44,19 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid COOKIE_SECURE: %w", err)
 	}
 
+	proxies, err := parsePrefixes(os.Getenv("TRUSTED_PROXIES"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
+	}
+
 	cfg := &Config{
-		Addr:          getEnv("ADDR", ":8080"),
-		DatabaseURL:   getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
-		SessionTTL:    ttl,
-		CookieSecure:  secure,
-		AdminUsername: getEnv("ADMIN_USERNAME", "admin"),
-		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
+		Addr:           getEnv("ADDR", ":8080"),
+		DatabaseURL:    getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
+		SessionTTL:     ttl,
+		CookieSecure:   secure,
+		TrustedProxies: proxies,
+		AdminUsername:  getEnv("ADMIN_USERNAME", "admin"),
+		AdminPassword:  os.Getenv("ADMIN_PASSWORD"),
 		OIDC: auth.OIDCConfig{
 			IssuerURL:    os.Getenv("OIDC_ISSUER_URL"),
 			ClientID:     os.Getenv("OIDC_CLIENT_ID"),
@@ -79,6 +91,33 @@ func Load() (*Config, error) {
 
 // OIDCEnabled reports whether SSO login is configured.
 func (c *Config) OIDCEnabled() bool { return c.OIDC.IssuerURL != "" }
+
+// parsePrefixes parses a comma-separated list of IP addresses and CIDR
+// ranges; a bare address becomes a single-host prefix.
+func parsePrefixes(list string) ([]netip.Prefix, error) {
+	var prefixes []netip.Prefix
+	for _, item := range strings.Split(list, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if !strings.Contains(item, "/") {
+			addr, err := netip.ParseAddr(item)
+			if err != nil {
+				return nil, err
+			}
+			addr = addr.Unmap()
+			prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
+			continue
+		}
+		prefix, err := netip.ParsePrefix(item)
+		if err != nil {
+			return nil, err
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixes, nil
+}
 
 func getEnv(key, fallback string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {

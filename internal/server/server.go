@@ -88,7 +88,7 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 
 	mux.Handle("/", spaHandler(frontend))
 
-	return logRequests(mux)
+	return realIP(s.cfg.TrustedProxies, logRequests(mux))
 }
 
 // decodeJSON decodes a JSON request body of at most 1 MiB into v, writing a
@@ -132,6 +132,6 @@ func logRequests(next http.Handler) http.Handler {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		slog.Info("request", "method", r.Method, "path", r.URL.Path, "status", rec.status, "duration", time.Since(start))
+		slog.Info("request", "method", r.Method, "path", r.URL.Path, "status", rec.status, "remote", r.RemoteAddr, "duration", time.Since(start))
 	})
 }

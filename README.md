@@ -9,7 +9,7 @@ make db                                   # start Postgres via docker compose
 ADMIN_PASSWORD=change-me make run         # build UI + server, run on :8080
 ```
 
-On first start, if the database has no users, an administrator account is created from `ADMIN_USERNAME` (default `admin`) and `ADMIN_PASSWORD`. With SSO configured, `ADMIN_PASSWORD` is optional: without it no local account is created, and administrators come from `OIDC_ADMIN_GROUP` (see below); if that isn't set either, the server logs a warning that nobody can manage users. If users exist but none is an administrator, the local `ADMIN_USERNAME` account is promoted; SSO accounts never are, since their usernames come from the provider.
+On startup, if no account is an administrator (on first start, or after SSO group sync revoked the role from everyone), a local administrator is created from `ADMIN_USERNAME` (default `admin`) and `ADMIN_PASSWORD`. Existing accounts are never promoted: if `ADMIN_USERNAME` is taken, the server logs a warning and you need to pick an unused name. With SSO configured, `ADMIN_PASSWORD` is optional: without it no local account is created, and administrators come from `OIDC_ADMIN_GROUP` (see below); if that isn't set either, the server logs a warning that nobody can manage users. Without SSO, startup fails if there is no administrator and no `ADMIN_PASSWORD`.
 
 ## Users and SSO
 

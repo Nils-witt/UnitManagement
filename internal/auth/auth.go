@@ -22,6 +22,9 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid username or password")
 	ErrInvalidSession     = errors.New("invalid or expired session")
+	// ErrAdminPasswordRequired means no administrator exists and there is no
+	// ADMIN_PASSWORD to create one with.
+	ErrAdminPasswordRequired = errors.New("no administrator exists: set ADMIN_PASSWORD to create the ADMIN_USERNAME account")
 )
 
 // dummyHash is compared against when a username does not exist, so that
@@ -49,19 +52,27 @@ func HashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-// EnsureAdmin creates the initial administrator if the users table is empty.
-// Callers skip it when SSO is configured and no password is set, since
-// administrators can then come from the provider (see main).
+// EnsureAdmin creates username as an administrator with password if no
+// account has the role, so there is always someone who can manage users. It
+// never promotes an existing account: that could be an SSO account, whose
+// username a user at the provider may have picked. It reports whether it
+// created the account, ErrAdminPasswordRequired if one is needed but password
+// is empty, and ErrUsernameTaken if username belongs to another account.
 func (s *Service) EnsureAdmin(ctx context.Context, username, password string) (bool, error) {
-	var count int64
-	if err := s.db.WithContext(ctx).Model(&models.User{}).Count(&count).Error; err != nil {
+	if ok, err := s.HasAdmin(ctx); ok || err != nil {
 		return false, err
 	}
-	if count > 0 {
-		return false, nil
-	}
 	if password == "" {
-		return false, errors.New("no users exist yet: set ADMIN_PASSWORD to create the initial admin account")
+		return false, ErrAdminPasswordRequired
+	}
+	// Checked up front because a failed INSERT is logged with its values,
+	// which include the password hash.
+	var taken int64
+	if err := s.db.WithContext(ctx).Model(&models.User{}).Where("username = ?", strings.TrimSpace(username)).Count(&taken).Error; err != nil {
+		return false, err
+	}
+	if taken > 0 {
+		return false, ErrUsernameTaken
 	}
 	if _, err := s.createUser(ctx, username, password, true); err != nil {
 		return false, err
@@ -76,21 +87,6 @@ func (s *Service) HasAdmin(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return admins > 0, nil
-}
-
-// PromoteAdminIfNone grants the administrator role to the local account
-// username if no account has it yet. Databases created before roles existed
-// have users but no administrator, and nobody could manage users without
-// one. SSO accounts are never promoted: their usernames come from provider
-// claims, so a user there could pick the name.
-func (s *Service) PromoteAdminIfNone(ctx context.Context, username string) (bool, error) {
-	if ok, err := s.HasAdmin(ctx); ok || err != nil {
-		return false, err
-	}
-	res := s.db.WithContext(ctx).Model(&models.User{}).
-		Where("username = ? AND password_hash <> ''", username).
-		Update("is_admin", true)
-	return res.RowsAffected > 0, res.Error
 }
 
 // Login verifies credentials and creates a new session. It returns the raw

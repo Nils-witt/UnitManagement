@@ -41,34 +41,20 @@ func run() error {
 	}
 
 	authService := auth.NewService(db, cfg.SessionTTL)
-	// With SSO, people can sign in without a local account, so the initial
-	// administrator is optional there.
-	if cfg.AdminPassword != "" || !cfg.OIDCEnabled() {
-		created, err := authService.EnsureAdmin(ctx, cfg.AdminUsername, cfg.AdminPassword)
-		if err != nil {
-			return err
-		}
-		if created {
-			slog.Info("created initial admin user", "username", cfg.AdminUsername)
-		}
-	}
-	promoted, err := authService.PromoteAdminIfNone(ctx, cfg.AdminUsername)
-	if err != nil {
-		return err
-	}
-	if promoted {
-		slog.Warn("no administrator existed; granted the role to ADMIN_USERNAME", "username", cfg.AdminUsername)
-	}
-	hasAdmin, err := authService.HasAdmin(ctx)
-	if err != nil {
-		return err
-	}
+	created, err := authService.EnsureAdmin(ctx, cfg.AdminUsername, cfg.AdminPassword)
 	switch {
-	case hasAdmin:
-	case cfg.OIDC.AdminGroup != "":
+	case created:
+		slog.Info("no administrator existed; created ADMIN_USERNAME as one", "username", cfg.AdminUsername)
+	case errors.Is(err, auth.ErrUsernameTaken):
+		slog.Warn("no administrator exists and ADMIN_USERNAME belongs to an existing account, which is not promoted: choose an unused ADMIN_USERNAME", "username", cfg.AdminUsername)
+	// With SSO, people can sign in without a local account, so ADMIN_PASSWORD
+	// is optional there.
+	case errors.Is(err, auth.ErrAdminPasswordRequired) && cfg.OIDC.AdminGroup != "":
 		slog.Info("no administrator yet; members of OIDC_ADMIN_GROUP get the role at SSO sign-in", "group", cfg.OIDC.AdminGroup)
-	default:
-		slog.Warn("no administrator account, so nobody can manage users: set OIDC_ADMIN_GROUP, or ADMIN_PASSWORD while the database has no users")
+	case errors.Is(err, auth.ErrAdminPasswordRequired) && cfg.OIDCEnabled():
+		slog.Warn("no administrator exists, so nobody can manage users: set OIDC_ADMIN_GROUP or ADMIN_PASSWORD")
+	case err != nil:
+		return err
 	}
 
 	var oidcProvider *auth.OIDCProvider

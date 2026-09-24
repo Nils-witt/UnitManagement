@@ -7,7 +7,7 @@ export interface AuthState {
   /** Set when the session ended on its own (expired or revoked), so the login
    * page can say why. Cleared by `logout` and `clearSessionMessage`. */
   sessionMessage: string | null;
-  /** Performs POST /api/auth/login; the server sets the session cookie. */
+  /** Performs POST /api/auth/login and stores the access token. */
   login: (username: string, password: string) => Promise<User>;
   /** Ends the session on the user's request. */
   logout: () => Promise<void>;

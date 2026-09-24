@@ -14,9 +14,13 @@ import (
 )
 
 type Config struct {
-	Addr         string
-	DatabaseURL  string
-	SessionTTL   time.Duration
+	Addr        string
+	DatabaseURL string
+	SessionTTL  time.Duration
+	// JWTSecret signs access tokens. Empty means main generates a random
+	// one, so tokens stop working when the server restarts.
+	JWTSecret []byte
+	// CookieSecure marks the short-lived SSO sign-in cookie as HTTPS-only.
 	CookieSecure bool
 
 	// InstanceName labels this deployment in the UI (page title, header,
@@ -48,6 +52,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid COOKIE_SECURE: %w", err)
 	}
 
+	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
+	if len(jwtSecret) > 0 && len(jwtSecret) < auth.MinJWTSecretLength {
+		return nil, fmt.Errorf("JWT_SECRET must be at least %d bytes long", auth.MinJWTSecretLength)
+	}
+
 	proxies, err := parsePrefixes(os.Getenv("TRUSTED_PROXIES"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
@@ -57,6 +66,7 @@ func Load() (*Config, error) {
 		Addr:           getEnv("ADDR", ":8080"),
 		DatabaseURL:    getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
 		SessionTTL:     ttl,
+		JWTSecret:      jwtSecret,
 		CookieSecure:   secure,
 		InstanceName:   strings.TrimSpace(os.Getenv("INSTANCE_NAME")),
 		TrustedProxies: proxies,

@@ -50,8 +50,9 @@ func (u *User) SSO() bool { return u.OIDCSubject != nil }
 // HasPassword reports whether the account can sign in with a password.
 func (u *User) HasPassword() bool { return u.PasswordHash != "" }
 
-// Session is a server-side login session. Only the SHA-256 hash of the
-// session token is stored, so a database leak does not expose live sessions.
+// Session is a server-side login session backing an access token (a JWT
+// whose "jti" is the session ID). Only the SHA-256 hash of the ID is stored,
+// so a database leak does not expose live sessions.
 type Session struct {
 	ID        uint      `gorm:"primaryKey"`
 	TokenHash string    `gorm:"uniqueIndex;not null"`

@@ -16,6 +16,15 @@ export interface User {
   updatedAt: string;
 }
 
+/** Result of POST /api/auth/login. */
+export interface LoginResponse {
+  /** Access token, sent as `Authorization: Bearer <token>`. */
+  token: string;
+  tokenType: 'Bearer';
+  expiresAt: string;
+  user: User;
+}
+
 export interface AuthMethods {
   oidc: boolean;
   /** Label for the SSO button, e.g. the provider's name. */

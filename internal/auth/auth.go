@@ -38,10 +38,17 @@ var dummyHash = sync.OnceValue(func() []byte {
 type Service struct {
 	db         *gorm.DB
 	sessionTTL time.Duration
+	tokens     *tokenSigner
 }
 
-func NewService(db *gorm.DB, sessionTTL time.Duration) *Service {
-	return &Service{db: db, sessionTTL: sessionTTL}
+// NewService signs access tokens with jwtSecret, which must be at least
+// MinJWTSecretLength bytes long.
+func NewService(db *gorm.DB, sessionTTL time.Duration, jwtSecret []byte) (*Service, error) {
+	tokens, err := newTokenSigner(jwtSecret)
+	if err != nil {
+		return nil, err
+	}
+	return &Service{db: db, sessionTTL: sessionTTL, tokens: tokens}, nil
 }
 
 func HashPassword(password string) (string, error) {
@@ -88,8 +95,8 @@ func (s *Service) HasAdmin(ctx context.Context) (bool, error) {
 	return admins > 0, nil
 }
 
-// Login verifies credentials and creates a new session. It returns the raw
-// session token (to be sent to the client) and the session's expiry.
+// Login verifies credentials and creates a new session. It returns the
+// session's access token (a JWT to be sent to the client) and its expiry.
 func (s *Service) Login(ctx context.Context, username, password string) (string, *models.User, time.Time, error) {
 	var user models.User
 	err := s.db.WithContext(ctx).Preload("Groups", byName).Where("username = ?", strings.TrimSpace(username)).First(&user).Error
@@ -113,15 +120,25 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 	return token, &user, expires, nil
 }
 
+// createSession stores a new session and returns an access token for it.
+// The token's "jti" is the session's random ID, of which only a hash is
+// stored, so a database leak does not expose live sessions.
 func (s *Service) createSession(ctx context.Context, userID uint) (string, time.Time, error) {
-	token, err := newToken()
+	sessionID, err := newSessionID()
 	if err != nil {
 		return "", time.Time{}, err
 	}
+	now := time.Now()
 	session := models.Session{
-		TokenHash: hashToken(token),
+		TokenHash: hashToken(sessionID),
 		UserID:    userID,
-		ExpiresAt: time.Now().Add(s.sessionTTL),
+		// JWT times have second precision; truncating keeps the token's
+		// expiry and the session's in step.
+		ExpiresAt: now.Add(s.sessionTTL).Truncate(time.Second),
+	}
+	token, err := s.tokens.sign(sessionID, userID, now, session.ExpiresAt)
+	if err != nil {
+		return "", time.Time{}, err
 	}
 	if err := s.db.WithContext(ctx).Create(&session).Error; err != nil {
 		return "", time.Time{}, fmt.Errorf("create session: %w", err)
@@ -129,18 +146,30 @@ func (s *Service) createSession(ctx context.Context, userID uint) (string, time.
 	return token, session.ExpiresAt, nil
 }
 
+// Logout ends the session of an access token. A token that is invalid or
+// already expired has no session to end, so that is not an error.
 func (s *Service) Logout(ctx context.Context, token string) error {
-	return s.db.WithContext(ctx).Where("token_hash = ?", hashToken(token)).Delete(&models.Session{}).Error
+	sessionID, _, err := s.tokens.verify(token)
+	if err != nil {
+		return nil
+	}
+	return s.db.WithContext(ctx).Where("token_hash = ?", hashToken(sessionID)).Delete(&models.Session{}).Error
 }
 
-// UserForToken resolves a session token to its user. It runs on every
-// authenticated request, so the user is fetched with a JOIN in one round trip
-// instead of Preload's second query.
+// UserForToken verifies an access token and resolves its session to the
+// user. A validly signed token only counts while its session exists, so
+// logout and password resets revoke it. This runs on every authenticated
+// request, so the user is fetched with a JOIN in one round trip instead of
+// Preload's second query.
 func (s *Service) UserForToken(ctx context.Context, token string) (*models.User, error) {
+	sessionID, userID, err := s.tokens.verify(token)
+	if err != nil {
+		return nil, err
+	}
 	var session models.Session
-	err := s.db.WithContext(ctx).
+	err = s.db.WithContext(ctx).
 		Joins("User").
-		Where("sessions.token_hash = ? AND sessions.expires_at > ?", hashToken(token), time.Now()).
+		Where("sessions.token_hash = ? AND sessions.user_id = ? AND sessions.expires_at > ?", hashToken(sessionID), userID, time.Now()).
 		First(&session).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrInvalidSession
@@ -167,10 +196,10 @@ func (s *Service) CleanupExpiredSessions(ctx context.Context, interval time.Dura
 	}
 }
 
-func newToken() (string, error) {
+func newSessionID() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate session token: %w", err)
+		return "", fmt.Errorf("generate session ID: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }

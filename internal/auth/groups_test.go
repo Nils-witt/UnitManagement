@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,7 +23,10 @@ func TestSyncOIDCGroups(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := NewService(db, time.Hour)
+	s, err := NewService(db, time.Hour, []byte(strings.Repeat("k", MinJWTSecretLength)))
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx := t.Context()
 
 	// Unique names keep reruns against the same database independent.

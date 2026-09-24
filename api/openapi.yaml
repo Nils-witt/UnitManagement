@@ -4,8 +4,10 @@ info:
   description: |
     JSON API of go-unit-mangement, served under `/api` next to the embedded web UI.
 
-    Authentication uses a `session` cookie, set by `POST /api/auth/login` or by
-    finishing the SSO flow. Errors are returned as `{"error": "<message>"}`.
+    Authentication uses a JWT access token sent as `Authorization: Bearer <token>`.
+    It is returned by `POST /api/auth/login` or handed to the web UI at the end
+    of the SSO flow, and is valid until it expires or its session is ended
+    (sign-out, password reset, account deletion). Errors are returned as `{"error": "<message>"}`.
     Request bodies are limited to 1 MiB.
   version: 1.0.0
 servers:
@@ -23,7 +25,7 @@ tags:
     description: Build info and health.
 
 security:
-  - sessionCookie: []
+  - bearerAuth: []
 
 paths:
   /api/auth/methods:
@@ -55,16 +57,11 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Signed in; the session cookie is set.
-          headers:
-            Set-Cookie:
-              description: The `session` cookie (HttpOnly, SameSite=Lax).
-              schema:
-                type: string
+          description: Signed in; the response carries the access token.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/LoginResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -82,12 +79,14 @@ paths:
     post:
       tags: [auth]
       summary: Sign out
-      description: Ends the current session, if any, and clears the session cookie. Always succeeds.
+      description: |
+        Ends the session of the Bearer token sent, if any; the client should
+        discard the token. Always succeeds.
       operationId: logout
       security: []
       responses:
         "204":
-          description: Signed out; the session cookie is cleared.
+          description: Signed out.
 
   /api/auth/me:
     get:
@@ -140,9 +139,10 @@ paths:
       tags: [auth]
       summary: SSO callback
       description: |
-        Redirect target registered at the identity provider. On success it sets
-        the session cookie and redirects to the path passed to
-        `/api/auth/oidc/login`. On failure it redirects to
+        Redirect target registered at the identity provider. On success it
+        redirects to the path passed to `/api/auth/oidc/login` with the access
+        token in the URL fragment (`#sso_token=<token>`), where only the page
+        itself can read it. On failure it redirects to
         `/login?sso_error=<code>` with `code` one of `denied`, `expired` or
         `failed`. Only available when SSO is configured (404 otherwise).
       operationId: oidcCallback
@@ -172,7 +172,7 @@ paths:
               schema:
                 type: string
             Set-Cookie:
-              description: The `session` cookie on success; the `oidc_flow` cookie is always cleared.
+              description: Clears the `oidc_flow` cookie.
               schema:
                 type: string
         "404":
@@ -364,7 +364,10 @@ paths:
         sends one JSON text message, a `UnitEvent`, for every unit that is
         created, updated or deleted; it ignores anything the client sends.
 
-        Only same-origin upgrades are accepted. The stream closes when the
+        Browsers can't set headers on a WebSocket, so besides the
+        Authorization header the token is accepted as the subprotocols
+        `bearer, <token>`; the server then selects `bearer`. Only same-origin
+        upgrades are accepted. The stream closes when the
         session ends (code 1008), when the server shuts down (1001), or when
         the client falls too far behind (1013). Changes made while
         disconnected are not replayed, so clients should refetch
@@ -548,10 +551,10 @@ paths:
 
 components:
   securitySchemes:
-    sessionCookie:
-      type: apiKey
-      in: cookie
-      name: session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 
   parameters:
     UserId:
@@ -580,7 +583,7 @@ components:
           example:
             error: invalid request body
     Unauthorized:
-      description: No valid session.
+      description: No valid access token.
       content:
         application/json:
           schema:
@@ -649,6 +652,22 @@ components:
         password:
           type: string
           minLength: 1
+
+    LoginResponse:
+      type: object
+      required: [token, tokenType, expiresAt, user]
+      properties:
+        token:
+          type: string
+          description: JWT access token, sent as `Authorization: Bearer <token>`.
+        tokenType:
+          type: string
+          const: Bearer
+        expiresAt:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/User"
 
     User:
       type: object

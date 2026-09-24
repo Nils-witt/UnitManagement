@@ -55,6 +55,15 @@ func (s *Server) adminManaged(u *models.User) bool {
 	return u.SSO() && s.oidc.ManagesAdminRole()
 }
 
+// tokenResponse is the result of a successful sign-in: an access token to
+// send as "Authorization: Bearer <token>" until it expires.
+type tokenResponse struct {
+	Token     string       `json:"token"`
+	TokenType string       `json:"tokenType"`
+	ExpiresAt time.Time    `json:"expiresAt"`
+	User      userResponse `json:"user"`
+}
+
 type loginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -90,17 +99,22 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.setSessionCookie(w, token, expires)
-	writeJSON(w, http.StatusOK, s.toUserResponse(user))
+	writeJSON(w, http.StatusOK, tokenResponse{
+		Token:     token,
+		TokenType: "Bearer",
+		ExpiresAt: expires,
+		User:      s.toUserResponse(user),
+	})
 }
 
+// handleLogout ends the session of the request's access token, if any. It
+// always succeeds: the client discards the token either way.
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if cookie, err := r.Cookie(auth.CookieName); err == nil && cookie.Value != "" {
-		if err := s.auth.Logout(r.Context(), cookie.Value); err != nil {
+	if token := auth.TokenFromRequest(r); token != "" {
+		if err := s.auth.Logout(r.Context(), token); err != nil {
 			slog.Error("logout", "err", err)
 		}
 	}
-	s.setSessionCookie(w, "", time.Unix(0, 0))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -114,21 +128,4 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.toUserResponse(user))
-}
-
-// setSessionCookie sets the session cookie; an expiry in the past clears it.
-func (s *Server) setSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
-	cookie := &http.Cookie{
-		Name:     auth.CookieName,
-		Value:    token,
-		Path:     "/",
-		Expires:  expires,
-		HttpOnly: true,
-		Secure:   s.cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
-	}
-	if token == "" {
-		cookie.MaxAge = -1
-	}
-	http.SetCookie(w, cookie)
 }

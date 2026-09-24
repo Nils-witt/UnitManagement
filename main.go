@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -40,7 +41,18 @@ func run() error {
 		return err
 	}
 
-	authService := auth.NewService(db, cfg.SessionTTL)
+	jwtSecret := cfg.JWTSecret
+	if len(jwtSecret) == 0 {
+		jwtSecret = make([]byte, auth.MinJWTSecretLength)
+		if _, err := rand.Read(jwtSecret); err != nil {
+			return err
+		}
+		slog.Warn("JWT_SECRET is not set; using a random key, so every sign-in ends when the server restarts")
+	}
+	authService, err := auth.NewService(db, cfg.SessionTTL, jwtSecret)
+	if err != nil {
+		return err
+	}
 	created, err := authService.EnsureAdmin(ctx, cfg.AdminUsername, cfg.AdminPassword)
 	switch {
 	case created:

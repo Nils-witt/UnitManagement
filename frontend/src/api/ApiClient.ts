@@ -1,15 +1,17 @@
 // The one place that talks to the Go HTTP API. It owns the request plumbing
-// (cookies, JSON bodies, error mapping) and one typed method per endpoint, so
-// callers never build URLs or serialize bodies themselves.
+// (the access token, JSON bodies, error mapping) and one typed method per
+// endpoint, so callers never build URLs or serialize bodies themselves.
 //
-// The session lives in an HttpOnly cookie set by the server, so the client
-// never sees a token: it only reports a 401 through `onSessionExpired`.
+// Every request carries the stored access token as a Bearer header; a 401 is
+// reported through `onSessionExpired`.
 
+import { getToken } from './tokenStore';
 import type {
   AuthMethods,
   CreateUserInput,
   Group,
   InstanceInfo,
+  LoginResponse,
   PositionHistoryEntry,
   Unit,
   UnitInput,
@@ -30,7 +32,7 @@ export class ApiError extends Error {
 }
 
 export interface ApiClientOptions {
-  /** Called when the server rejects the session cookie. */
+  /** Called when the server rejects the access token. */
   onSessionExpired?: () => void;
 }
 
@@ -46,9 +48,13 @@ export class ApiClient {
   /** Throws an ApiError carrying the server's `{"error": "..."}` message and
    * the status on any non-OK response. */
   private async request(path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers);
+    const token = getToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+
     let res: Response;
     try {
-      res = await fetch(path, { credentials: 'same-origin', ...init });
+      res = await fetch(path, { ...init, headers });
     } catch {
       throw new ApiError('network error');
     }
@@ -86,12 +92,13 @@ export class ApiClient {
 
   // ---- auth --------------------------------------------------------------
 
-  /** POST /api/auth/login. The server sets the session cookie. Rejects with
-   * status 401 for wrong credentials. */
-  login(username: string, password: string): Promise<User> {
+  /** POST /api/auth/login. Resolves to the access token and the user; the
+   * caller stores the token. Rejects with status 401 for wrong credentials. */
+  login(username: string, password: string): Promise<LoginResponse> {
     return this.sendJsonForJson('/api/auth/login', 'POST', { username, password });
   }
 
+  /** Ends the session of the stored token on the server. */
   async logout(): Promise<void> {
     await this.sendJson('/api/auth/logout', 'POST');
   }
@@ -176,10 +183,12 @@ export class ApiClient {
   }
 
   /** Opens the WebSocket that pushes every unit change (UnitEvent JSON
-   * messages). The session cookie authenticates it like any request. */
+   * messages). Browsers can't set headers on a WebSocket, so the token goes
+   * in the subprotocols "bearer, <token>" instead. */
   openUnitEvents(): WebSocket {
     const url = new URL('/api/units/events', window.location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    return new WebSocket(url);
+    const token = getToken();
+    return new WebSocket(url, token ? ['bearer', token] : undefined);
   }
 }

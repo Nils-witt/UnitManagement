@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { ApiClient } from '../api/ApiClient.ts';
+import { getToken, setToken, takeSsoToken } from '../api/tokenStore.ts';
 import type { User } from '../api/types.ts';
 import RouteFallback from '../components/RouteFallback.tsx';
 import { AuthContext, type AuthState } from './AuthContext.ts';
@@ -14,7 +15,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [user, setUserState] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Without a token there is no session to check. A finished SSO sign-in
+  // hands its token over in the URL fragment; adopting it is idempotent, so
+  // a repeated initializer call is harmless.
+  const [hadToken] = useState(() => {
+    const ssoToken = takeSsoToken();
+    if (ssoToken) setToken(ssoToken);
+    return getToken() !== null;
+  });
+  const [loading, setLoading] = useState(hadToken);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
   // Mirrors `user` for expireSession, which must stay stable across renders.
   const userRef = useRef<User | null>(null);
@@ -23,14 +32,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(next);
   }, []);
 
-  // The session cookie is HttpOnly, so the only way to know whether it is
-  // still valid is to ask the server once on load.
+  // A stored token may have expired or been revoked, so ask the server once
+  // on load whether it is still valid.
   useEffect(() => {
+    if (!hadToken) return;
     let cancelled = false;
     anonymousApi
       .me()
       .then((me) => {
-        if (!cancelled) setUser(me);
+        if (cancelled) return;
+        if (!me) setToken(null);
+        setUser(me);
       })
       .catch((err: unknown) => console.error(err))
       .finally(() => {
@@ -39,11 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [setUser]);
+  }, [hadToken, setUser]);
 
   const login = useCallback(
     async (username: string, password: string) => {
-      const loggedIn = await anonymousApi.login(username, password);
+      const { token, user: loggedIn } = await anonymousApi.login(username, password);
+      setToken(token);
       setSessionMessage(null);
       setUser(loggedIn);
       return loggedIn;
@@ -52,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const endSession = useCallback(() => {
+    setToken(null);
     setUser(null);
     // Cached API data belongs to the user who fetched it: without this the
     // next login would briefly see the previous user's data.
@@ -62,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await anonymousApi.logout();
     } catch (err) {
-      // The cookie is cleared client-side regardless; the server session
+      // The token is discarded client-side regardless; the server session
       // expires on its own.
       console.error(err);
     }

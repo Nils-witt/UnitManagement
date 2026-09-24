@@ -45,9 +45,10 @@ func (s *Server) handleUnitEvents(w http.ResponseWriter, r *http.Request) {
 	events, unsubscribe := s.units.Subscribe()
 	defer unsubscribe()
 
-	// Accept rejects cross-origin upgrades, so another site can't ride the
-	// session cookie.
-	conn, err := websocket.Accept(w, r, nil)
+	// The client authenticates with the subprotocols "bearer, <token>"; the
+	// browser fails the handshake unless the server selects one of them.
+	// Accept also rejects cross-origin upgrades.
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{auth.WebSocketProtocol}})
 	if err != nil {
 		log.Warn("unit event stream rejected", "origin", r.Header.Get("Origin"), "err", err)
 		return
@@ -78,7 +79,7 @@ func (s *Server) streamUnitEvents(conn *websocket.Conn, r *http.Request, events 
 	// ctx ends when the client closes or drops the connection.
 	ctx := conn.CloseRead(r.Context())
 
-	token := sessionToken(r)
+	token := auth.TokenFromRequest(r)
 	ping := time.NewTicker(eventsPingInterval)
 	defer ping.Stop()
 	sessionCheck := time.NewTicker(eventsSessionCheck)
@@ -127,14 +128,6 @@ func (s *Server) writeUnitEvent(ctx context.Context, conn *websocket.Conn, ev un
 	ctx, cancel := context.WithTimeout(ctx, eventsWriteTimeout)
 	defer cancel()
 	return wsjson.Write(ctx, conn, msg)
-}
-
-func sessionToken(r *http.Request) string {
-	cookie, err := r.Cookie(auth.CookieName)
-	if err != nil {
-		return ""
-	}
-	return cookie.Value
 }
 
 // clientGone reports whether err only means the client went away.

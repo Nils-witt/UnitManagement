@@ -1,6 +1,6 @@
 # go-unit-mangement
 
-A Go web server (net/http + GORM + PostgreSQL) with session-based login. The UI in `frontend/` (Vite + React, MUI, React Router, TanStack Query, i18next with English and German) follows the structure of [Tileserve-GO](https://github.com/Nils-witt/Tileserve-GO)'s frontend and is built and embedded into the Go binary.
+A Go web server (net/http + GORM + PostgreSQL) with JWT-based login (`Authorization: Bearer` tokens backed by revocable server-side sessions). The UI in `frontend/` (Vite + React, MUI, React Router, TanStack Query, i18next with English and German) follows the structure of [Tileserve-GO](https://github.com/Nils-witt/Tileserve-GO)'s frontend and is built and embedded into the Go binary.
 
 ## Quick start
 
@@ -45,7 +45,7 @@ Try a local build without publishing with `goreleaser release --snapshot --clean
 
 ## Configuration
 
-See `.env.example`. Set `COOKIE_SECURE=true` when serving over HTTPS.
+See `.env.example`. Set `JWT_SECRET` to a random string of at least 32 bytes (e.g. `openssl rand -base64 48`) so sign-ins survive restarts; without it the server signs tokens with a random key per start. Set `COOKIE_SECURE=true` when serving over HTTPS (it guards the short-lived SSO sign-in cookie).
 
 Set `INSTANCE_NAME` to label the deployment (e.g. `Kreis Nord`); it replaces the product name in the page title, header and login page.
 
@@ -57,7 +57,7 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 
 | Method | Path               | Description                          |
 |--------|--------------------|--------------------------------------|
-| POST   | `/api/auth/login`  | `{username, password}` → sets cookie |
+| POST   | `/api/auth/login`  | `{username, password}` → `{token, tokenType, expiresAt, user}` |
 | POST   | `/api/auth/logout` | Ends the session                     |
 | GET    | `/api/auth/me`     | Current user (401 if logged out)     |
 | GET    | `/api/auth/methods` | `{oidc, oidcName}`: sign-in options |

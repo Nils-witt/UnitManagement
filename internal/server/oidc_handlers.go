@@ -43,7 +43,10 @@ func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleOIDCCallback finishes SSO: the provider redirects here with a code,
-// which is exchanged for a verified identity and a normal session cookie.
+// which is exchanged for a verified identity and a normal access token. The
+// token is handed to the single-page app in the URL fragment of the
+// post-login target (#sso_token=<token>), which browsers never send to a
+// server or in a Referer; the app removes it from the URL right away.
 // Failures go back to the login page with a short error code; details are
 // only logged, since they may describe the provider's configuration.
 func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +81,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, user, expires, err := s.auth.LoginOIDC(r.Context(), identity)
+	token, user, _, err := s.auth.LoginOIDC(r.Context(), identity)
 	if err != nil {
 		slog.Error("oidc login", "err", err)
 		redirectToLogin(w, r, "failed")
@@ -86,8 +89,11 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Info("oidc login", "user", user.Username)
 
-	s.setSessionCookie(w, token, expires)
-	http.Redirect(w, r, sanitizeRedirectPath(flowValues.Get("redirect")), http.StatusFound)
+	// http.Redirect would clean the fragment as part of the path, so the
+	// Location header is set directly.
+	target, _, _ := strings.Cut(sanitizeRedirectPath(flowValues.Get("redirect")), "#")
+	w.Header().Set("Location", target+"#"+url.Values{"sso_token": {token}}.Encode())
+	w.WriteHeader(http.StatusFound)
 }
 
 func (s *Server) setOIDCFlowCookie(w http.ResponseWriter, value string, maxAge int) {

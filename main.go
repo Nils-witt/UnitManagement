@@ -41,12 +41,16 @@ func run() error {
 	}
 
 	authService := auth.NewService(db, cfg.SessionTTL)
-	created, err := authService.EnsureAdmin(ctx, cfg.AdminUsername, cfg.AdminPassword)
-	if err != nil {
-		return err
-	}
-	if created {
-		slog.Info("created initial admin user", "username", cfg.AdminUsername)
+	// With SSO, people can sign in without a local account, so the initial
+	// administrator is optional there.
+	if cfg.AdminPassword != "" || !cfg.OIDCEnabled() {
+		created, err := authService.EnsureAdmin(ctx, cfg.AdminUsername, cfg.AdminPassword)
+		if err != nil {
+			return err
+		}
+		if created {
+			slog.Info("created initial admin user", "username", cfg.AdminUsername)
+		}
 	}
 	promoted, err := authService.PromoteAdminIfNone(ctx, cfg.AdminUsername)
 	if err != nil {
@@ -54,6 +58,17 @@ func run() error {
 	}
 	if promoted {
 		slog.Warn("no administrator existed; granted the role to ADMIN_USERNAME", "username", cfg.AdminUsername)
+	}
+	hasAdmin, err := authService.HasAdmin(ctx)
+	if err != nil {
+		return err
+	}
+	switch {
+	case hasAdmin:
+	case cfg.OIDC.AdminGroup != "":
+		slog.Info("no administrator yet; members of OIDC_ADMIN_GROUP get the role at SSO sign-in", "group", cfg.OIDC.AdminGroup)
+	default:
+		slog.Warn("no administrator account, so nobody can manage users: set OIDC_ADMIN_GROUP, or ADMIN_PASSWORD while the database has no users")
 	}
 
 	var oidcProvider *auth.OIDCProvider

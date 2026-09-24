@@ -15,5 +15,9 @@ export function sortUsers(users: User[], key: UserSortKey, direction: SortDirect
 export function filterUsers(users: User[], search: string): User[] {
   const needle = search.trim().toLowerCase();
   if (!needle) return users;
-  return users.filter((u) => u.username.toLowerCase().includes(needle));
+  return users.filter(
+    (u) =>
+      u.username.toLowerCase().includes(needle) ||
+      u.groups.some((g) => g.name.toLowerCase().includes(needle)),
+  );
 }

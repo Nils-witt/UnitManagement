@@ -18,8 +18,30 @@ type User struct {
 	// names are explicit because GORM would otherwise derive o_id_c_issuer.
 	OIDCIssuer  *string `gorm:"column:oidc_issuer;uniqueIndex:idx_users_oidc_identity"`
 	OIDCSubject *string `gorm:"column:oidc_subject;uniqueIndex:idx_users_oidc_identity"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Groups are the SSO account's groups at the provider as of their last
+	// sign-in; local accounts have none.
+	Groups    []Group `gorm:"many2many:user_groups"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Group is a group at the SSO provider. Groups are created the first time a
+// member signs in and kept when their last member leaves.
+type Group struct {
+	ID        uint   `gorm:"primaryKey"`
+	Name      string `gorm:"uniqueIndex;not null"`
+	Users     []User `gorm:"many2many:user_groups"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// UserGroup is a membership. It is the explicit join table of User.Groups
+// (see database.Connect), so memberships go when either side is deleted.
+type UserGroup struct {
+	UserID  uint   `gorm:"primaryKey"`
+	User    *User  `gorm:"constraint:OnDelete:CASCADE"`
+	GroupID uint   `gorm:"primaryKey;index"`
+	Group   *Group `gorm:"constraint:OnDelete:CASCADE"`
 }
 
 // SSO reports whether the account is linked to an SSO identity.

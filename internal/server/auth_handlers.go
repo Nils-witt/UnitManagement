@@ -19,9 +19,11 @@ type userResponse struct {
 	SSO         bool   `json:"sso"`
 	HasPassword bool   `json:"hasPassword"`
 	// AdminManaged means the SSO provider's groups decide IsAdmin.
-	AdminManaged bool      `json:"adminManaged"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	AdminManaged bool `json:"adminManaged"`
+	// Groups are the SSO provider's groups as of the last sign-in.
+	Groups    []groupRef `json:"groups"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 func (s *Server) toUserResponse(u *models.User) userResponse {
@@ -32,9 +34,18 @@ func (s *Server) toUserResponse(u *models.User) userResponse {
 		SSO:          u.SSO(),
 		HasPassword:  u.HasPassword(),
 		AdminManaged: s.adminManaged(u),
+		Groups:       groupRefs(u.Groups),
 		CreatedAt:    u.CreatedAt,
 		UpdatedAt:    u.UpdatedAt,
 	}
+}
+
+func groupRefs(groups []models.Group) []groupRef {
+	refs := make([]groupRef, len(groups))
+	for i, g := range groups {
+		refs[i] = groupRef{ID: g.ID, Name: g.Name}
+	}
+	return refs
 }
 
 // adminManaged reports whether u's administrator role is synced from the SSO
@@ -94,7 +105,15 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.toUserResponse(auth.UserFromContext(r.Context())))
+	// The session's user comes without groups; loading them here keeps that
+	// query off every other request.
+	user, err := s.auth.GetUser(r.Context(), auth.UserFromContext(r.Context()).ID)
+	if err != nil {
+		slog.Error("load current user", "err", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, s.toUserResponse(user))
 }
 
 // setSessionCookie sets the session cookie; an expiry in the past clears it.

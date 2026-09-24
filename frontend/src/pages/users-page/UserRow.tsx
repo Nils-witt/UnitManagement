@@ -35,6 +35,13 @@ export default function UserRow({
           t('userRow.user')
         )}
       </TableCell>
+      <TableCell>
+        <Stack direction="row" spacing={0.5} useFlexGap className="user-row__chips">
+          {u.groups.map((g) => (
+            <Chip key={g.id} size="small" variant="outlined" label={g.name} />
+          ))}
+        </Stack>
+      </TableCell>
       <TableCell>{fmtDate(u.createdAt, i18n.language)}</TableCell>
       <TableCell className="user-row__actions">
         <Stack direction="row" spacing={1} useFlexGap className="user-row__action-buttons">

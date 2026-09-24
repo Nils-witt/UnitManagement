@@ -50,34 +50,39 @@ func TestParseGroups(t *testing.T) {
 		{`["a","b"]`, []string{"a", "b"}, false},
 		{`[]`, []string{}, false},
 		{`"a"`, []string{"a"}, false},
+		{`["b","a","b",""]`, []string{"a", "b"}, false},
+		{`null`, []string{}, false},
 		{`42`, nil, true},
 		{`[1]`, nil, true},
 	}
 	for _, tc := range tests {
 		got, err := parseGroups(json.RawMessage(tc.raw))
-		if (err != nil) != tc.wantErr || !slices.Equal(got, tc.want) {
+		if (err != nil) != tc.wantErr || !slices.Equal(got, tc.want) || (!tc.wantErr && got == nil) {
 			t.Errorf("parseGroups(%s) = %q, %v; want %q, error %v", tc.raw, got, err, tc.want, tc.wantErr)
 		}
 	}
 }
 
-func TestExchangeSyncsAdminRole(t *testing.T) {
+func TestExchangeSyncsGroups(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name       string
 		adminGroup string
 		idToken    map[string]any
+		// userinfo nil means the provider has no userinfo endpoint.
 		userinfo   map[string]any
-		want       *bool
+		wantGroups []string
+		wantAdmin  *bool
 	}{
-		{"sync off", "", map[string]any{"groups": []string{"admins"}}, nil, nil},
-		{"member via id token", "admins", map[string]any{"groups": []string{"staff", "admins"}}, nil, ptr(true)},
-		{"not a member", "admins", map[string]any{"groups": []string{"staff"}}, nil, ptr(false)},
-		{"single group string", "admins", map[string]any{"groups": "admins"}, nil, ptr(true)},
-		{"member via userinfo", "admins", nil, map[string]any{"groups": []string{"admins"}}, ptr(true)},
-		{"id token wins over userinfo", "admins", map[string]any{"groups": []string{}}, map[string]any{"groups": []string{"admins"}}, ptr(false)},
-		{"claim missing everywhere", "admins", nil, map[string]any{}, ptr(false)},
+		{"admin sync off", "", map[string]any{"groups": []string{"admins"}}, nil, []string{"admins"}, nil},
+		{"member via id token", "admins", map[string]any{"groups": []string{"staff", "admins"}}, nil, []string{"admins", "staff"}, ptr(true)},
+		{"not a member", "admins", map[string]any{"groups": []string{"staff"}}, nil, []string{"staff"}, ptr(false)},
+		{"single group string", "admins", map[string]any{"groups": "admins"}, nil, []string{"admins"}, ptr(true)},
+		{"member via userinfo", "admins", nil, map[string]any{"groups": []string{"admins"}}, []string{"admins"}, ptr(true)},
+		{"id token wins over userinfo", "admins", map[string]any{"groups": []string{}}, map[string]any{"groups": []string{"admins"}}, []string{}, ptr(false)},
+		{"claim missing everywhere", "admins", nil, map[string]any{}, []string{}, ptr(false)},
+		{"no userinfo endpoint", "", nil, nil, []string{}, nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -101,8 +106,11 @@ func TestExchangeSyncsAdminRole(t *testing.T) {
 			if id.Subject != "sub-1" {
 				t.Errorf("subject = %q", id.Subject)
 			}
-			if (id.IsAdmin == nil) != (tc.want == nil) || (id.IsAdmin != nil && *id.IsAdmin != *tc.want) {
-				t.Errorf("IsAdmin = %v, want %v", deref(id.IsAdmin), deref(tc.want))
+			if !slices.Equal(id.Groups, tc.wantGroups) || id.Groups == nil {
+				t.Errorf("Groups = %#v, want %q", id.Groups, tc.wantGroups)
+			}
+			if (id.IsAdmin == nil) != (tc.wantAdmin == nil) || (id.IsAdmin != nil && *id.IsAdmin != *tc.wantAdmin) {
+				t.Errorf("IsAdmin = %v, want %v", deref(id.IsAdmin), deref(tc.wantAdmin))
 			}
 		})
 	}
@@ -111,7 +119,8 @@ func TestExchangeSyncsAdminRole(t *testing.T) {
 const fakeNonce = "nonce"
 
 // newFakeOP serves just enough of an OpenID provider for Exchange: discovery,
-// keys, a token endpoint issuing an ID token with extraClaims, and userinfo.
+// keys, a token endpoint issuing an ID token with extraClaims, and, unless
+// userinfo is nil, a userinfo endpoint.
 func newFakeOP(t *testing.T, extraClaims, userinfo map[string]any) *httptest.Server {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -128,14 +137,17 @@ func newFakeOP(t *testing.T, extraClaims, userinfo map[string]any) *httptest.Ser
 		_ = json.NewEncoder(w).Encode(v)
 	}
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, map[string]any{
+		doc := map[string]any{
 			"issuer":                                srv.URL,
 			"authorization_endpoint":                srv.URL + "/auth",
 			"token_endpoint":                        srv.URL + "/token",
-			"userinfo_endpoint":                     srv.URL + "/userinfo",
 			"jwks_uri":                              srv.URL + "/keys",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
-		})
+		}
+		if userinfo != nil {
+			doc["userinfo_endpoint"] = srv.URL + "/userinfo"
+		}
+		writeJSON(w, doc)
 	})
 	mux.HandleFunc("/keys", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"keys": []map[string]any{{
@@ -163,9 +175,6 @@ func newFakeOP(t *testing.T, extraClaims, userinfo map[string]any) *httptest.Ser
 		})
 	})
 	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, _ *http.Request) {
-		if userinfo == nil {
-			t.Error("userinfo fetched although the id token has the groups claim")
-		}
 		info := map[string]any{"sub": "sub-1"}
 		maps.Copy(info, userinfo)
 		writeJSON(w, info)

@@ -8,6 +8,7 @@
 import type {
   AuthMethods,
   CreateUserInput,
+  Group,
   InstanceInfo,
   PositionHistoryEntry,
   Unit,
@@ -143,6 +144,12 @@ export class ApiClient {
 
   deleteUser(id: number): Promise<void> {
     return this.del(`/api/users/${id}`);
+  }
+
+  // ---- groups (administrators only) ---------------------------------------
+
+  listGroups(): Promise<Group[]> {
+    return this.getJson('/api/groups');
   }
 
   // ---- units ---------------------------------------------------------------

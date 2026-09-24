@@ -10,6 +10,8 @@ export interface User {
   hasPassword: boolean;
   /** The administrator role is synced from the SSO provider's groups. */
   adminManaged: boolean;
+  /** The SSO provider's groups as of the last sign-in, by name; empty for local accounts. */
+  groups: GroupRef[];
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +44,21 @@ export interface VersionInfo {
   /** The release tag; absent for untagged builds. */
   version?: string;
   commit: string;
+}
+
+export interface GroupRef {
+  id: number;
+  name: string;
+}
+
+/** A group at the SSO provider, created when a member first signs in. */
+export interface Group {
+  id: number;
+  name: string;
+  /** By username; empty once the last member has left. */
+  members: UserRef[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserRef {

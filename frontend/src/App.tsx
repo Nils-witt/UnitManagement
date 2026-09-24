@@ -20,6 +20,7 @@ import { ROUTE_SEGMENTS } from './routes.ts';
 // doesn't download them.
 const HomePage = lazy(() => import('./pages/HomePage.tsx'));
 const UsersPage = lazy(() => import('./pages/UsersPage.tsx'));
+const GroupsPage = lazy(() => import('./pages/GroupsPage.tsx'));
 const UnitsPage = lazy(() => import('./pages/UnitsPage.tsx'));
 const MapPage = lazy(() => import('./pages/MapPage.tsx'));
 
@@ -52,6 +53,7 @@ export default function App() {
                         <Route path={ROUTE_SEGMENTS.map} element={<MapPage />} />
                         <Route element={<AdminOnlyRoute />}>
                           <Route path={ROUTE_SEGMENTS.users} element={<UsersPage />} />
+                          <Route path={ROUTE_SEGMENTS.groups} element={<GroupsPage />} />
                         </Route>
                         <Route path="*" element={<NotFoundPage />} />
                       </Route>

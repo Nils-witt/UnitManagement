@@ -55,6 +55,7 @@ export default function UsersListCard({
             {sortCell('username', t('login.usernameLabel'))}
             <TableCell>{t('usersListCard.signIn')}</TableCell>
             <TableCell>{t('usersListCard.role')}</TableCell>
+            <TableCell>{t('usersListCard.groups')}</TableCell>
             {sortCell('createdAt', t('usersListCard.created'))}
             <TableCell>{t('common.actions')}</TableCell>
           </TableRow>
@@ -71,7 +72,7 @@ export default function UsersListCard({
           ))}
           {users.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} align="center">
+              <TableCell colSpan={6} align="center">
                 {loading ? t('common.loading') : t('usersListCard.empty')}
               </TableCell>
             </TableRow>

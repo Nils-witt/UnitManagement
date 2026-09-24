@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-unit-mangement/internal/models"
 )
@@ -24,9 +25,12 @@ var (
 	ErrPasswordTooShort = fmt.Errorf("password must be at least %d characters", MinPasswordLength)
 )
 
+// byName orders preloaded groups.
+func byName(db *gorm.DB) *gorm.DB { return db.Order("name") }
+
 func (s *Service) ListUsers(ctx context.Context) ([]models.User, error) {
 	var users []models.User
-	if err := s.db.WithContext(ctx).Order("username").Find(&users).Error; err != nil {
+	if err := s.db.WithContext(ctx).Preload("Groups", byName).Order("username").Find(&users).Error; err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
 	return users, nil
@@ -34,7 +38,7 @@ func (s *Service) ListUsers(ctx context.Context) ([]models.User, error) {
 
 func (s *Service) GetUser(ctx context.Context, id uint) (*models.User, error) {
 	var user models.User
-	err := s.db.WithContext(ctx).First(&user, id).Error
+	err := s.db.WithContext(ctx).Preload("Groups", byName).First(&user, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrUserNotFound
 	}
@@ -90,7 +94,7 @@ func (s *Service) UpdateUser(ctx context.Context, id uint, isAdmin bool, passwor
 
 	var user models.User
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.First(&user, id).Error; err != nil {
+		if err := tx.Preload("Groups", byName).First(&user, id).Error; err != nil {
 			return err
 		}
 		user.IsAdmin = isAdmin
@@ -100,7 +104,8 @@ func (s *Service) UpdateUser(ctx context.Context, id uint, isAdmin bool, passwor
 				return err
 			}
 		}
-		return tx.Save(&user).Error
+		// Memberships only change at SSO sign-in.
+		return tx.Omit(clause.Associations).Save(&user).Error
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrUserNotFound

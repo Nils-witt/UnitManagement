@@ -20,7 +20,8 @@
     "openNavMenu": "Navigationsmenü öffnen",
     "users": "Benutzer",
     "units": "Einheiten",
-    "map": "Karte"
+    "map": "Karte",
+    "groups": "Gruppen"
   },
   "auth": {
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
@@ -90,8 +91,20 @@
   "usersListCard": {
     "signIn": "Anmeldung",
     "role": "Rolle",
+    "groups": "Gruppen",
     "created": "Erstellt",
     "empty": "Keine Benutzer gefunden"
+  },
+  "groups": {
+    "searchLabel": "Gruppen suchen",
+    "syncedNotice": "Gruppen und Mitgliedschaften werden bei jeder Anmeldung per SSO übernommen."
+  },
+  "groupsListCard": {
+    "name": "Name",
+    "members": "Mitglieder",
+    "firstSeen": "Zuerst gesehen",
+    "noMembers": "Keine Mitglieder",
+    "empty": "Keine Gruppen gefunden"
   },
   "units": {
     "searchLabel": "Einheiten suchen",

@@ -20,7 +20,8 @@
     "openNavMenu": "Open navigation menu",
     "users": "Users",
     "units": "Units",
-    "map": "Map"
+    "map": "Map",
+    "groups": "Groups"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -90,8 +91,20 @@
   "usersListCard": {
     "signIn": "Sign-in",
     "role": "Role",
+    "groups": "Groups",
     "created": "Created",
     "empty": "No users found"
+  },
+  "groups": {
+    "searchLabel": "Search groups",
+    "syncedNotice": "Groups and memberships are synced from SSO at each sign-in."
+  },
+  "groupsListCard": {
+    "name": "Name",
+    "members": "Members",
+    "firstSeen": "First seen",
+    "noMembers": "No members",
+    "empty": "No groups found"
   },
   "units": {
     "searchLabel": "Search units",

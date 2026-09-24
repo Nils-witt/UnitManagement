@@ -15,6 +15,8 @@ tags:
     description: Sign-in, sign-out and the current session.
   - name: users
     description: User management (administrators only).
+  - name: groups
+    description: Groups synced from the SSO provider (administrators only).
   - name: units
     description: Units and their last known position.
   - name: system
@@ -281,6 +283,30 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/groups:
+    get:
+      tags: [groups]
+      summary: List groups
+      description: >-
+        Sorted by name, members by username. Groups are created when a member
+        first signs in via SSO and kept after their last member leaves.
+      operationId: listGroups
+      responses:
+        "200":
+          description: All groups.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Group"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -595,7 +621,7 @@ components:
 
     User:
       type: object
-      required: [id, username, isAdmin, sso, hasPassword, adminManaged, createdAt, updatedAt]
+      required: [id, username, isAdmin, sso, hasPassword, adminManaged, groups, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -615,6 +641,13 @@ components:
           description: >-
             Whether isAdmin is synced from the SSO provider's groups
             (OIDC_ADMIN_GROUP); updates must then leave it unchanged.
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupRef"
+          description: >-
+            The user's groups at the SSO provider as of their last sign-in,
+            sorted by name. Always empty for local accounts.
         createdAt:
           type: string
           format: date-time
@@ -650,6 +683,37 @@ components:
         password:
           type: string
           description: New password (at least 8 characters). Empty or missing keeps the current one.
+
+    GroupRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    Group:
+      type: object
+      required: [id, name, members, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          description: The group's name at the SSO provider.
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserRef"
+        createdAt:
+          type: string
+          format: date-time
+          description: When a member first signed in with this group.
+        updatedAt:
+          type: string
+          format: date-time
 
     UserRef:
       type: object

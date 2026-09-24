@@ -69,6 +69,7 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("POST /api/users", admin(s.handleCreateUser))
 	mux.Handle("PUT /api/users/{id}", admin(s.handleUpdateUser))
 	mux.Handle("DELETE /api/users/{id}", admin(s.handleDeleteUser))
+	mux.Handle("GET /api/groups", admin(s.handleListGroups))
 
 	mux.Handle("GET /api/units", authed(s.handleListUnits))
 	mux.Handle("GET /api/units/events", authed(s.handleUnitEvents))

@@ -17,6 +17,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-unit-mangement/internal/models"
 )
@@ -38,7 +39,8 @@ type OIDCConfig struct {
 	// administrator role of SSO accounts: on every sign-in, the account is
 	// an administrator exactly if GroupsClaim lists this group.
 	AdminGroup string
-	// GroupsClaim names the claim listing the user's groups.
+	// GroupsClaim names the claim listing the user's groups, which are
+	// copied to the account on every sign-in.
 	GroupsClaim string
 }
 
@@ -111,6 +113,9 @@ type OIDCIdentity struct {
 	Subject           string
 	PreferredUsername string
 	Email             string
+	// Groups are the user's groups at the provider, sorted and without
+	// duplicates; empty when the provider sends none.
+	Groups []string
 	// IsAdmin is the administrator role granted by the provider's groups,
 	// or nil when group sync is off and the role is managed in the app.
 	IsAdmin *bool
@@ -150,11 +155,12 @@ func (p *OIDCProvider) Exchange(ctx context.Context, flow OIDCFlow, state, code 
 		PreferredUsername: claims.PreferredUsername,
 		Email:             claims.Email,
 	}
+	groups, err := p.groups(ctx, idToken, token)
+	if err != nil {
+		return OIDCIdentity{}, err
+	}
+	identity.Groups = groups
 	if p.ManagesAdminRole() {
-		groups, err := p.groups(ctx, idToken, token)
-		if err != nil {
-			return OIDCIdentity{}, err
-		}
 		isAdmin := slices.Contains(groups, p.adminGroup)
 		identity.IsAdmin = &isAdmin
 	}
@@ -163,7 +169,7 @@ func (p *OIDCProvider) Exchange(ctx context.Context, flow OIDCFlow, state, code 
 
 // groups reads the groups claim from the ID token or, since many providers
 // leave it out of the ID token by default, from the userinfo endpoint. A
-// user without the claim is in no groups.
+// user without the claim, or at a provider without userinfo, is in no groups.
 func (p *OIDCProvider) groups(ctx context.Context, idToken *oidc.IDToken, token *oauth2.Token) ([]string, error) {
 	var claims map[string]json.RawMessage
 	if err := idToken.Claims(&claims); err != nil {
@@ -171,6 +177,9 @@ func (p *OIDCProvider) groups(ctx context.Context, idToken *oidc.IDToken, token 
 	}
 	raw, ok := claims[p.groupsClaim]
 	if !ok {
+		if p.provider.UserInfoEndpoint() == "" {
+			return []string{}, nil
+		}
 		info, err := p.provider.UserInfo(ctx, oauth2.StaticTokenSource(token))
 		if err != nil {
 			return nil, fmt.Errorf("fetch userinfo: %w", err)
@@ -180,8 +189,12 @@ func (p *OIDCProvider) groups(ctx context.Context, idToken *oidc.IDToken, token 
 			return nil, fmt.Errorf("decode userinfo claims: %w", err)
 		}
 		if raw, ok = claims[p.groupsClaim]; !ok {
-			slog.Warn("oidc groups claim missing from id token and userinfo", "claim", p.groupsClaim, "subject", idToken.Subject)
-			return nil, nil
+			// Only a problem when roles depend on groups; otherwise the
+			// provider may simply not be set up to send them.
+			if p.ManagesAdminRole() {
+				slog.Warn("oidc groups claim missing from id token and userinfo", "claim", p.groupsClaim, "subject", idToken.Subject)
+			}
+			return []string{}, nil
 		}
 	}
 	return parseGroups(raw)
@@ -191,18 +204,22 @@ func (p *OIDCProvider) groups(ctx context.Context, idToken *oidc.IDToken, token 
 // a single group, one string.
 func parseGroups(raw json.RawMessage) ([]string, error) {
 	var groups []string
-	if err := json.Unmarshal(raw, &groups); err == nil {
-		return groups, nil
+	if err := json.Unmarshal(raw, &groups); err != nil {
+		var group string
+		if err := json.Unmarshal(raw, &group); err != nil {
+			return nil, fmt.Errorf("groups claim is neither a string nor a list of strings: %s", raw)
+		}
+		groups = []string{group}
 	}
-	var group string
-	if err := json.Unmarshal(raw, &group); err != nil {
-		return nil, fmt.Errorf("groups claim is neither a string nor a list of strings: %s", raw)
-	}
-	return []string{group}, nil
+	// A JSON null decodes to a nil slice.
+	groups = slices.DeleteFunc(groups, func(g string) bool { return g == "" })
+	slices.Sort(groups)
+	return append([]string{}, slices.Compact(groups)...), nil
 }
 
-// LoginOIDC signs in the account linked to id, creating it on first sign-in.
-// New accounts have no password. Without group sync (id.IsAdmin nil) they are
+// LoginOIDC signs in the account linked to id, creating it on first sign-in,
+// and replaces the account's groups with id.Groups. New accounts have no
+// password. Without group sync (id.IsAdmin nil) they are
 // not administrators, least privilege for an identity nobody has vetted yet,
 // and an administrator can promote them; with it, every sign-in applies the
 // role the provider's groups grant.
@@ -211,18 +228,87 @@ func (s *Service) LoginOIDC(ctx context.Context, id OIDCIdentity) (string, *mode
 	if err != nil {
 		return "", nil, time.Time{}, err
 	}
-	if id.IsAdmin != nil && user.IsAdmin != *id.IsAdmin {
-		if err := s.db.WithContext(ctx).Model(user).Update("is_admin", *id.IsAdmin).Error; err != nil {
-			return "", nil, time.Time{}, fmt.Errorf("sync administrator role: %w", err)
-		}
-		user.IsAdmin = *id.IsAdmin
-		slog.Info("administrator role synced from oidc groups", "user", user.Username, "isAdmin", user.IsAdmin)
+	if err := s.syncOIDCGroups(ctx, user, id); err != nil {
+		return "", nil, time.Time{}, err
 	}
 	token, expires, err := s.createSession(ctx, user.ID)
 	if err != nil {
 		return "", nil, time.Time{}, err
 	}
 	return token, user, expires, nil
+}
+
+// syncOIDCGroups makes the user a member of exactly the provider's groups,
+// creating groups seen for the first time, and with group sync of the
+// administrator role applies the role they grant.
+func (s *Service) syncOIDCGroups(ctx context.Context, user *models.User, id OIDCIdentity) error {
+	adminChanged := id.IsAdmin != nil && user.IsAdmin != *id.IsAdmin
+	var groups []models.Group
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		if groups, err = ensureGroups(tx, id.Groups); err != nil {
+			return err
+		}
+		ids := make([]uint, len(groups))
+		memberships := make([]models.UserGroup, len(groups))
+		for i, g := range groups {
+			ids[i] = g.ID
+			memberships[i] = models.UserGroup{UserID: user.ID, GroupID: g.ID}
+		}
+		leave := tx.Where("user_id = ?", user.ID)
+		if len(ids) > 0 {
+			leave = leave.Where("group_id NOT IN ?", ids)
+		}
+		if err := leave.Delete(&models.UserGroup{}).Error; err != nil {
+			return err
+		}
+		if len(memberships) > 0 {
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&memberships).Error; err != nil {
+				return err
+			}
+		}
+		if adminChanged {
+			return tx.Model(user).Update("is_admin", *id.IsAdmin).Error
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("sync oidc groups of %q: %w", user.Username, err)
+	}
+	user.Groups = groups
+	if adminChanged {
+		user.IsAdmin = *id.IsAdmin
+		slog.Info("administrator role synced from oidc groups", "user", user.Username, "isAdmin", user.IsAdmin)
+	}
+	return nil
+}
+
+// ensureGroups returns the groups with the given names, sorted by name,
+// creating those that don't exist yet.
+func ensureGroups(tx *gorm.DB, names []string) ([]models.Group, error) {
+	if len(names) == 0 {
+		return []models.Group{}, nil
+	}
+	var groups []models.Group
+	if err := tx.Where("name IN ?", names).Order("name").Find(&groups).Error; err != nil {
+		return nil, err
+	}
+	if len(groups) == len(names) {
+		return groups, nil
+	}
+	var missing []models.Group
+	for _, name := range names {
+		if !slices.ContainsFunc(groups, func(g models.Group) bool { return g.Name == name }) {
+			missing = append(missing, models.Group{Name: name})
+		}
+	}
+	// A concurrent sign-in may create the same group first.
+	if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "name"}}, DoNothing: true}).Create(&missing).Error; err != nil {
+		return nil, err
+	}
+	groups = nil
+	err := tx.Where("name IN ?", names).Order("name").Find(&groups).Error
+	return groups, err
 }
 
 func (s *Service) userForOIDCIdentity(ctx context.Context, id OIDCIdentity) (*models.User, error) {

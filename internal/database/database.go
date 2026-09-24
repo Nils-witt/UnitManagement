@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -36,7 +37,15 @@ func Connect(dsn string) (*gorm.DB, error) {
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
-	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Unit{}, &models.UnitPosition{}); err != nil {
+	// Memberships use an explicit join model so their foreign keys cascade.
+	err = errors.Join(
+		db.SetupJoinTable(&models.User{}, "Groups", &models.UserGroup{}),
+		db.SetupJoinTable(&models.Group{}, "Users", &models.UserGroup{}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("set up user_groups join table: %w", err)
+	}
+	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Group{}, &models.UserGroup{}, &models.Unit{}, &models.UnitPosition{}); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
 	// Units positioned before the history existed start it with their current

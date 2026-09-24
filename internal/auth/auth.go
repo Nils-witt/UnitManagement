@@ -88,7 +88,7 @@ func (s *Service) PromoteAdminIfNone(ctx context.Context, username string) (bool
 // session token (to be sent to the client) and the session's expiry.
 func (s *Service) Login(ctx context.Context, username, password string) (string, *models.User, time.Time, error) {
 	var user models.User
-	err := s.db.WithContext(ctx).Where("username = ?", strings.TrimSpace(username)).First(&user).Error
+	err := s.db.WithContext(ctx).Preload("Groups", byName).Where("username = ?", strings.TrimSpace(username)).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && !user.HasPassword()) {
 		// SSO-only accounts have no password; compare anyway so they are
 		// indistinguishable by timing from unknown usernames.

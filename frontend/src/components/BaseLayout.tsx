@@ -32,7 +32,12 @@ export default function BaseLayout() {
     { to: ROUTES.home, label: t('nav.home') },
     { to: ROUTES.units, label: t('nav.units') },
     { to: ROUTES.map, label: t('nav.map') },
-    ...(user?.isAdmin ? [{ to: ROUTES.users, label: t('nav.users') }] : []),
+    ...(user?.isAdmin
+      ? [
+          { to: ROUTES.users, label: t('nav.users') },
+          { to: ROUTES.groups, label: t('nav.groups') },
+        ]
+      : []),
   ];
 
   const handleOpenNavMenu = (event: MouseEvent<HTMLElement>) => {

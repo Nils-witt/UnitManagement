@@ -157,6 +157,7 @@ export default function MapPage() {
   const { t } = useTranslation();
   const api = useApi();
   const { units, loading, error: loadError, reloadUnits } = useUnits();
+  const pageRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<maplibregl.Map | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -183,6 +184,8 @@ export default function MapPage() {
     });
     m.addControl(new maplibregl.NavigationControl());
     m.addControl(new maplibregl.ScaleControl());
+    // Takes the whole page fullscreen, so the overlays on the map stay visible.
+    m.addControl(new maplibregl.FullscreenControl({ container: pageRef.current! }));
     m.once('style.load', () => setStyleLoaded(true));
     setMap(m);
     return () => {
@@ -308,8 +311,13 @@ export default function MapPage() {
     setMenu(null);
   };
 
+  // Menus render into the page rather than the body, so they still show
+  // while the page is fullscreen.
+  const overlayContainer = () => pageRef.current;
+
   return (
     <Paper
+      ref={pageRef}
       className="map-page"
       style={{ '--map-symbol-height': `${symbolHeight}px` } as CSSProperties}
     >
@@ -335,6 +343,7 @@ export default function MapPage() {
         ))}
       <Menu
         open={menu !== null}
+        container={overlayContainer}
         onClose={() => setMenu(null)}
         anchorReference="anchorPosition"
         anchorPosition={menu ? { top: menu.y, left: menu.x } : undefined}
@@ -375,6 +384,7 @@ export default function MapPage() {
       </IconButton>
       <Popover
         open={settingsAnchor !== null}
+        container={overlayContainer}
         anchorEl={settingsAnchor}
         onClose={() => setSettingsAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
@@ -406,6 +416,7 @@ export default function MapPage() {
             variant="standard"
             // Matches the text next to it.
             sx={{ '& .MuiInputBase-root': { typography: 'body2' } }}
+            slotProps={{ select: { MenuProps: { container: overlayContainer } } }}
             aria-label={t('map.historySpan')}
             value={String(trackSpan)}
             onChange={(e) =>

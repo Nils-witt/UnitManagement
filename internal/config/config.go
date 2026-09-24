@@ -67,6 +67,9 @@ func Load() (*Config, error) {
 			ClientID:     os.Getenv("OIDC_CLIENT_ID"),
 			ClientSecret: os.Getenv("OIDC_CLIENT_SECRET"),
 			RedirectURL:  os.Getenv("OIDC_REDIRECT_URL"),
+			ExtraScopes:  strings.Fields(strings.ReplaceAll(os.Getenv("OIDC_EXTRA_SCOPES"), ",", " ")),
+			AdminGroup:   strings.TrimSpace(os.Getenv("OIDC_ADMIN_GROUP")),
+			GroupsClaim:  getEnv("OIDC_GROUPS_CLAIM", "groups"),
 		},
 		OIDCDisplayName: getEnv("OIDC_DISPLAY_NAME", "SSO"),
 	}

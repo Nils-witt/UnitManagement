@@ -73,6 +73,7 @@
     "minLengthHint": "Mindestens {{count}} Zeichen",
     "isAdmin": "Administrator",
     "isAdminSelf": "Administrator (Sie können Ihre eigene Rolle nicht entfernen)",
+    "isAdminManaged": "Administrator (über SSO-Gruppen verwaltet)",
     "editTitle": "{{name}} bearbeiten",
     "newTitle": "Neuer Benutzer"
   },

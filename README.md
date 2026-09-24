@@ -19,6 +19,8 @@ SSO uses OpenID Connect (authorization code flow with PKCE) and works with any c
 
 The first SSO sign-in creates an account linked to the provider's issuer and subject, named after the `preferred_username` claim (or the email, or the subject). New SSO accounts are not administrators and have no password; an administrator can promote them or set a password to also allow password sign-in. Anyone who can sign in at the provider gets an account, so restrict access to the client at the provider if needed.
 
+To manage administrators at the provider instead, set `OIDC_ADMIN_GROUP` to a group name. Every SSO sign-in then reads the user's groups from the `OIDC_GROUPS_CLAIM` claim (default `groups`; from the ID token, or from the userinfo endpoint if the ID token lacks it) and grants the administrator role exactly to members of that group, revoking it from everyone else. The Users page then locks the role of SSO accounts; local accounts are unaffected. Changes at the provider take effect at the user's next sign-in, not in running sessions. Some providers only send groups when asked for them: set `OIDC_EXTRA_SCOPES` (e.g. `groups` for Dex), or add a groups mapper to the client (Keycloak).
+
 ## Development
 
 Run the Go server (`go run .`) and, in another terminal, `make dev-frontend`. Vite serves the UI with hot reload on http://localhost:5173 and proxies `/api` to `:8080`.

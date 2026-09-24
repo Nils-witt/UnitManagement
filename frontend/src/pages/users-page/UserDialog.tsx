@@ -37,6 +37,7 @@ function UserForm({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const adminManaged = user?.adminManaged ?? false;
   const passwordTooShort = password !== '' && password.length < MIN_PASSWORD_LENGTH;
   const passwordHint = editing
     ? user.hasPassword
@@ -91,11 +92,17 @@ function UserForm({
         control={
           <Switch
             checked={isAdmin}
-            disabled={self}
+            disabled={self || adminManaged}
             onChange={(e) => setIsAdmin(e.target.checked)}
           />
         }
-        label={self ? t('userDialog.isAdminSelf') : t('userDialog.isAdmin')}
+        label={
+          adminManaged
+            ? t('userDialog.isAdminManaged')
+            : self
+              ? t('userDialog.isAdminSelf')
+              : t('userDialog.isAdmin')
+        }
       />
       <Stack direction="row" spacing={1} className="user-dialog__actions">
         <Button onClick={onClose} disabled={submitting}>

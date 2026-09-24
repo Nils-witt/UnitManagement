@@ -32,6 +32,18 @@ func (s *Service) ListUsers(ctx context.Context) ([]models.User, error) {
 	return users, nil
 }
 
+func (s *Service) GetUser(ctx context.Context, id uint) (*models.User, error) {
+	var user models.User
+	err := s.db.WithContext(ctx).First(&user, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get user %d: %w", id, err)
+	}
+	return &user, nil
+}
+
 // CreateUser creates a local account that signs in with a password.
 func (s *Service) CreateUser(ctx context.Context, username, password string, isAdmin bool) (*models.User, error) {
 	if err := validatePassword(password); err != nil {

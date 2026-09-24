@@ -6,8 +6,11 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -28,13 +31,25 @@ type OIDCConfig struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURL  string
+	// ExtraScopes are requested in addition to openid, profile and email,
+	// e.g. "groups" for providers that only send groups when asked.
+	ExtraScopes []string
+	// AdminGroup, when set, makes the provider the source of truth for the
+	// administrator role of SSO accounts: on every sign-in, the account is
+	// an administrator exactly if GroupsClaim lists this group.
+	AdminGroup string
+	// GroupsClaim names the claim listing the user's groups.
+	GroupsClaim string
 }
 
 // OIDCProvider runs the authorization code flow (with PKCE) against one
 // provider. A nil *OIDCProvider means SSO is not configured.
 type OIDCProvider struct {
-	verifier *oidc.IDTokenVerifier
-	oauth2   oauth2.Config
+	provider    *oidc.Provider
+	verifier    *oidc.IDTokenVerifier
+	oauth2      oauth2.Config
+	adminGroup  string
+	groupsClaim string
 }
 
 // NewOIDCProvider discovers the provider via its
@@ -45,16 +60,23 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 		return nil, fmt.Errorf("discover oidc provider %q: %w", cfg.IssuerURL, err)
 	}
 	return &OIDCProvider{
-		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.ClientID}),
+		provider:    provider,
+		adminGroup:  cfg.AdminGroup,
+		groupsClaim: cfg.GroupsClaim,
+		verifier:    provider.Verifier(&oidc.Config{ClientID: cfg.ClientID}),
 		oauth2: oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
 			RedirectURL:  cfg.RedirectURL,
 			Endpoint:     provider.Endpoint(),
-			Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+			Scopes:       append([]string{oidc.ScopeOpenID, "profile", "email"}, cfg.ExtraScopes...),
 		},
 	}, nil
 }
+
+// ManagesAdminRole reports whether group sync decides the administrator role
+// of SSO accounts, so it must not be changed by hand.
+func (p *OIDCProvider) ManagesAdminRole() bool { return p != nil && p.adminGroup != "" }
 
 // OIDCFlow is the per-attempt secret state that the browser carries (in a
 // short-lived cookie) from the start of a sign-in to the callback: State
@@ -89,6 +111,9 @@ type OIDCIdentity struct {
 	Subject           string
 	PreferredUsername string
 	Email             string
+	// IsAdmin is the administrator role granted by the provider's groups,
+	// or nil when group sync is off and the role is managed in the app.
+	IsAdmin *bool
 }
 
 // Exchange trades the callback's authorization code for an ID token and
@@ -119,21 +144,79 @@ func (p *OIDCProvider) Exchange(ctx context.Context, flow OIDCFlow, state, code 
 	if err := idToken.Claims(&claims); err != nil {
 		return OIDCIdentity{}, fmt.Errorf("decode id token claims: %w", err)
 	}
-	return OIDCIdentity{
+	identity := OIDCIdentity{
 		Issuer:            idToken.Issuer,
 		Subject:           idToken.Subject,
 		PreferredUsername: claims.PreferredUsername,
 		Email:             claims.Email,
-	}, nil
+	}
+	if p.ManagesAdminRole() {
+		groups, err := p.groups(ctx, idToken, token)
+		if err != nil {
+			return OIDCIdentity{}, err
+		}
+		isAdmin := slices.Contains(groups, p.adminGroup)
+		identity.IsAdmin = &isAdmin
+	}
+	return identity, nil
+}
+
+// groups reads the groups claim from the ID token or, since many providers
+// leave it out of the ID token by default, from the userinfo endpoint. A
+// user without the claim is in no groups.
+func (p *OIDCProvider) groups(ctx context.Context, idToken *oidc.IDToken, token *oauth2.Token) ([]string, error) {
+	var claims map[string]json.RawMessage
+	if err := idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("decode id token claims: %w", err)
+	}
+	raw, ok := claims[p.groupsClaim]
+	if !ok {
+		info, err := p.provider.UserInfo(ctx, oauth2.StaticTokenSource(token))
+		if err != nil {
+			return nil, fmt.Errorf("fetch userinfo: %w", err)
+		}
+		claims = nil
+		if err := info.Claims(&claims); err != nil {
+			return nil, fmt.Errorf("decode userinfo claims: %w", err)
+		}
+		if raw, ok = claims[p.groupsClaim]; !ok {
+			slog.Warn("oidc groups claim missing from id token and userinfo", "claim", p.groupsClaim, "subject", idToken.Subject)
+			return nil, nil
+		}
+	}
+	return parseGroups(raw)
+}
+
+// parseGroups accepts a list of group names or, as some providers send for
+// a single group, one string.
+func parseGroups(raw json.RawMessage) ([]string, error) {
+	var groups []string
+	if err := json.Unmarshal(raw, &groups); err == nil {
+		return groups, nil
+	}
+	var group string
+	if err := json.Unmarshal(raw, &group); err != nil {
+		return nil, fmt.Errorf("groups claim is neither a string nor a list of strings: %s", raw)
+	}
+	return []string{group}, nil
 }
 
 // LoginOIDC signs in the account linked to id, creating it on first sign-in.
-// New accounts are not administrators and have no password: least privilege
-// for an identity nobody has vetted yet; an administrator can promote them.
+// New accounts have no password. Without group sync (id.IsAdmin nil) they are
+// not administrators, least privilege for an identity nobody has vetted yet,
+// and an administrator can promote them; with it, every sign-in applies the
+// role the provider's groups grant.
 func (s *Service) LoginOIDC(ctx context.Context, id OIDCIdentity) (string, *models.User, time.Time, error) {
 	user, err := s.userForOIDCIdentity(ctx, id)
 	if err != nil {
 		return "", nil, time.Time{}, err
+	}
+	if id.IsAdmin != nil && user.IsAdmin != *id.IsAdmin {
+		if err := s.db.WithContext(ctx).Model(user).Update("is_admin", *id.IsAdmin).Error; err != nil {
+			return "", nil, time.Time{}, fmt.Errorf("sync administrator role: %w", err)
+		}
+		user.IsAdmin = *id.IsAdmin
+		slog.Info("administrator role synced from oidc groups", "user", user.Username, "isAdmin", user.IsAdmin)
 	}
 	token, expires, err := s.createSession(ctx, user.ID)
 	if err != nil {

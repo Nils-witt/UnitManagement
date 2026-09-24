@@ -8,6 +8,8 @@ export interface User {
   sso: boolean;
   /** Can sign in with a password (SSO-only accounts can't). */
   hasPassword: boolean;
+  /** The administrator role is synced from the SSO provider's groups. */
+  adminManaged: boolean;
   createdAt: string;
   updatedAt: string;
 }

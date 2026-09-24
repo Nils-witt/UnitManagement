@@ -29,7 +29,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := make([]userResponse, len(users))
 	for i := range users {
-		resp[i] = toUserResponse(&users[i])
+		resp[i] = s.toUserResponse(&users[i])
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -45,7 +45,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("user created", "by", auth.UserFromContext(r.Context()).Username, "user", user.Username, "isAdmin", user.IsAdmin)
-	writeJSON(w, http.StatusCreated, toUserResponse(user))
+	writeJSON(w, http.StatusCreated, s.toUserResponse(user))
 }
 
 func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -63,13 +63,24 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "you cannot remove your own administrator role")
 		return
 	}
+	if s.oidc.ManagesAdminRole() {
+		target, err := s.auth.GetUser(r.Context(), id)
+		if err != nil {
+			writeUserError(w, err)
+			return
+		}
+		if s.adminManaged(target) && target.IsAdmin != req.IsAdmin {
+			writeError(w, http.StatusBadRequest, "the administrator role of SSO accounts is managed by the provider's groups")
+			return
+		}
+	}
 	user, err := s.auth.UpdateUser(r.Context(), id, req.IsAdmin, req.Password)
 	if err != nil {
 		writeUserError(w, err)
 		return
 	}
 	slog.Info("user updated", "by", current.Username, "user", user.Username, "isAdmin", user.IsAdmin, "passwordChanged", req.Password != "")
-	writeJSON(w, http.StatusOK, toUserResponse(user))
+	writeJSON(w, http.StatusOK, s.toUserResponse(user))
 }
 
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {

@@ -73,6 +73,7 @@
     "minLengthHint": "At least {{count}} characters",
     "isAdmin": "Administrator",
     "isAdminSelf": "Administrator (you can't remove your own role)",
+    "isAdminManaged": "Administrator (managed by SSO groups)",
     "editTitle": "Edit {{name}}",
     "newTitle": "New user"
   },

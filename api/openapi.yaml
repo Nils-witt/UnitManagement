@@ -595,7 +595,7 @@ components:
 
     User:
       type: object
-      required: [id, username, isAdmin, sso, hasPassword, createdAt, updatedAt]
+      required: [id, username, isAdmin, sso, hasPassword, adminManaged, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -610,6 +610,11 @@ components:
         hasPassword:
           type: boolean
           description: Whether the user can sign in with a password.
+        adminManaged:
+          type: boolean
+          description: >-
+            Whether isAdmin is synced from the SSO provider's groups
+            (OIDC_ADMIN_GROUP); updates must then leave it unchanged.
         createdAt:
           type: string
           format: date-time
@@ -639,7 +644,9 @@ components:
       properties:
         isAdmin:
           type: boolean
-          description: The new role. Omitting it removes the administrator role.
+          description: >-
+            The new role. Omitting it removes the administrator role. Must
+            equal the current role when the user's adminManaged is true.
         password:
           type: string
           description: New password (at least 8 characters). Empty or missing keeps the current one.

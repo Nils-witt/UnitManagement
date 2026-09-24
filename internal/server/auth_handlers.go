@@ -13,25 +13,35 @@ import (
 // userResponse is the JSON shape of a user; it never includes the password
 // hash or the raw SSO identity.
 type userResponse struct {
-	ID          uint      `json:"id"`
-	Username    string    `json:"username"`
-	IsAdmin     bool      `json:"isAdmin"`
-	SSO         bool      `json:"sso"`
-	HasPassword bool      `json:"hasPassword"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	IsAdmin     bool   `json:"isAdmin"`
+	SSO         bool   `json:"sso"`
+	HasPassword bool   `json:"hasPassword"`
+	// AdminManaged means the SSO provider's groups decide IsAdmin.
+	AdminManaged bool      `json:"adminManaged"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
-func toUserResponse(u *models.User) userResponse {
+func (s *Server) toUserResponse(u *models.User) userResponse {
 	return userResponse{
-		ID:          u.ID,
-		Username:    u.Username,
-		IsAdmin:     u.IsAdmin,
-		SSO:         u.SSO(),
-		HasPassword: u.HasPassword(),
-		CreatedAt:   u.CreatedAt,
-		UpdatedAt:   u.UpdatedAt,
+		ID:           u.ID,
+		Username:     u.Username,
+		IsAdmin:      u.IsAdmin,
+		SSO:          u.SSO(),
+		HasPassword:  u.HasPassword(),
+		AdminManaged: s.adminManaged(u),
+		CreatedAt:    u.CreatedAt,
+		UpdatedAt:    u.UpdatedAt,
 	}
+}
+
+// adminManaged reports whether u's administrator role is synced from the SSO
+// provider's groups; a change made in the app would be undone at their next
+// sign-in.
+func (s *Server) adminManaged(u *models.User) bool {
+	return u.SSO() && s.oidc.ManagesAdminRole()
 }
 
 type loginRequest struct {
@@ -70,7 +80,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, token, expires)
-	writeJSON(w, http.StatusOK, toUserResponse(user))
+	writeJSON(w, http.StatusOK, s.toUserResponse(user))
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +94,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, toUserResponse(auth.UserFromContext(r.Context())))
+	writeJSON(w, http.StatusOK, s.toUserResponse(auth.UserFromContext(r.Context())))
 }
 
 // setSessionCookie sets the session cookie; an expiry in the past clears it.

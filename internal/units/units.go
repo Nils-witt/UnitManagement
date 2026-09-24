@@ -115,6 +115,13 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 }
 
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models.User) (*models.Unit, error) {
+	return s.Patch(ctx, id, func(cur *Input) { *cur = in }, by)
+}
+
+// Patch updates the unit like Update, with the input patch makes of the
+// unit's current fields. It runs under the row lock, so concurrent patches of
+// different fields don't overwrite each other.
+func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), by *models.User) (*models.Unit, error) {
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Lock the row so concurrent updates can't both miss a position change.
 		var unit models.Unit
@@ -126,6 +133,8 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models
 			return fmt.Errorf("get unit %s: %w", id, err)
 		}
 		before := unit
+		in := inputOf(&unit)
+		patch(&in)
 		if err := apply(&unit, in); err != nil {
 			return err
 		}
@@ -233,6 +242,20 @@ func equalPtr[T comparable](a, b *T) bool {
 
 func (s *Service) preload(ctx context.Context) *gorm.DB {
 	return s.db.WithContext(ctx).Preload("CreatedBy").Preload("UpdatedBy")
+}
+
+// inputOf returns the unit's editable fields.
+func inputOf(unit *models.Unit) Input {
+	in := Input{Name: unit.Name, Symbol: unit.Symbol, TacticalName: unit.TacticalName}
+	if unit.HasPosition() {
+		in.Position = &Position{
+			Latitude:  *unit.Latitude,
+			Longitude: *unit.Longitude,
+			Height:    unit.Height,
+			Timestamp: *unit.PositionTimestamp,
+		}
+	}
+	return in
 }
 
 // apply validates in and copies it onto unit.

@@ -77,6 +77,7 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("GET /api/units/{id}", authed(s.handleGetUnit))
 	mux.Handle("GET /api/units/{id}/positions", authed(s.handleUnitPositions))
 	mux.Handle("PUT /api/units/{id}", authed(s.handleUpdateUnit))
+	mux.Handle("PATCH /api/units/{id}", authed(s.handlePatchUnit))
 	mux.Handle("DELETE /api/units/{id}", authed(s.handleDeleteUnit))
 
 	mux.HandleFunc("GET /api/version", s.handleVersion)

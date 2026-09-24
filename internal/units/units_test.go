@@ -105,3 +105,23 @@ func TestSamePosition(t *testing.T) {
 		})
 	}
 }
+
+func TestInputOfRoundTrips(t *testing.T) {
+	lat, lon, height := 1.0, 2.0, 3.0
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	unit := models.Unit{
+		Name: "Alpha", Latitude: &lat, Longitude: &lon, Height: &height, PositionTimestamp: &ts,
+		Symbol: &models.UnitSymbol{Grundzeichen: "fahrzeug"},
+	}
+	var got models.Unit
+	if err := apply(&got, inputOf(&unit)); err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != unit.Name || !samePosition(&got, &unit) || *got.Symbol != *unit.Symbol || got.TacticalName != nil {
+		t.Errorf("got %+v, want %+v", got, unit)
+	}
+
+	if in := inputOf(&models.Unit{Name: "Bravo"}); in.Position != nil {
+		t.Errorf("unit without position: got position %+v", in.Position)
+	}
+}

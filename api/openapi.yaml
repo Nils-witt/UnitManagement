@@ -430,6 +430,37 @@ paths:
           $ref: "#/components/responses/UnitNameTaken"
         "500":
           $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [units]
+      summary: Partially update a unit
+      description: >
+        Changes only the fields present in the body. A null position, symbol or
+        tactical name clears it; position, symbol and tactical name are
+        replaced as a whole, not merged.
+      operationId: patchUnit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnitPatchRequest"
+      responses:
+        "200":
+          description: The updated unit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/UnitNameTaken"
+        "500":
+          $ref: "#/components/responses/InternalError"
     delete:
       tags: [units]
       summary: Delete a unit
@@ -785,6 +816,31 @@ components:
             - type: "null"
         tacticalName:
           description: A missing or null tactical name, or one without parts, clears it.
+          oneOf:
+            - $ref: "#/components/schemas/TacticalName"
+            - type: "null"
+
+    UnitPatchRequest:
+      type: object
+      description: Missing fields are left unchanged.
+      properties:
+        name:
+          type: string
+          description: Surrounding whitespace is trimmed; must be unique.
+          minLength: 1
+          maxLength: 64
+        position:
+          description: A null position clears it.
+          oneOf:
+            - $ref: "#/components/schemas/Position"
+            - type: "null"
+        symbol:
+          description: A null symbol, or one without components, clears it.
+          oneOf:
+            - $ref: "#/components/schemas/UnitSymbol"
+            - type: "null"
+        tacticalName:
+          description: A null tactical name, or one without parts, clears it.
           oneOf:
             - $ref: "#/components/schemas/TacticalName"
             - type: "null"

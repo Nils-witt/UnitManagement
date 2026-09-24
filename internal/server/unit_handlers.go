@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -32,6 +33,16 @@ type unitRequest struct {
 	// Symbol's and TacticalName's JSON shapes are defined by their struct tags.
 	Symbol       *models.UnitSymbol   `json:"symbol"`
 	TacticalName *models.TacticalName `json:"tacticalName"`
+}
+
+// unitPatchRequest is the body of a patch. A missing field is left
+// unchanged; a null position, symbol or tactical name clears it. Position,
+// symbol and tactical name are replaced as a whole, not merged.
+type unitPatchRequest struct {
+	Name         json.RawMessage `json:"name"`
+	Position     json.RawMessage `json:"position"`
+	Symbol       json.RawMessage `json:"symbol"`
+	TacticalName json.RawMessage `json:"tacticalName"`
 }
 
 // userRefResponse names the user who created or last changed something; it is
@@ -108,6 +119,46 @@ func (req *unitRequest) input() units.Input {
 		in.Position = &units.Position{Latitude: p.Lat, Longitude: p.Lon, Height: p.Height, Timestamp: ts}
 	}
 	return in
+}
+
+// patch returns the function applying req to a unit's current input, or an
+// error when a field has the wrong type or name is null.
+func (req *unitPatchRequest) patch() (func(*units.Input), error) {
+	var fields unitRequest
+	for _, f := range []struct {
+		raw json.RawMessage
+		v   any
+	}{
+		{req.Name, &fields.Name},
+		{req.Position, &fields.Position},
+		{req.Symbol, &fields.Symbol},
+		{req.TacticalName, &fields.TacticalName},
+	} {
+		if f.raw == nil {
+			continue
+		}
+		if err := json.Unmarshal(f.raw, f.v); err != nil {
+			return nil, err
+		}
+	}
+	if string(req.Name) == "null" {
+		return nil, units.ErrInvalidName
+	}
+	patched := fields.input()
+	return func(in *units.Input) {
+		if req.Name != nil {
+			in.Name = patched.Name
+		}
+		if req.Position != nil {
+			in.Position = patched.Position
+		}
+		if req.Symbol != nil {
+			in.Symbol = patched.Symbol
+		}
+		if req.TacticalName != nil {
+			in.TacticalName = patched.TacticalName
+		}
+	}, nil
 }
 
 func (s *Server) handleListUnits(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +244,34 @@ func (s *Server) handleUpdateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("unit updated", "by", current.Username, "unit", unit.Name, "id", unit.ID)
+	writeJSON(w, http.StatusOK, toUnitResponse(unit))
+}
+
+func (s *Server) handlePatchUnit(w http.ResponseWriter, r *http.Request) {
+	id, ok := unitIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	var req unitPatchRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	patch, err := req.patch()
+	if errors.Is(err, units.ErrInvalidName) {
+		writeUnitError(w, err)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	current := auth.UserFromContext(r.Context())
+	unit, err := s.units.Patch(r.Context(), id, patch, current)
+	if err != nil {
+		writeUnitError(w, err)
+		return
+	}
+	slog.Info("unit patched", "by", current.Username, "unit", unit.Name, "id", unit.ID)
 	writeJSON(w, http.StatusOK, toUnitResponse(unit))
 }
 

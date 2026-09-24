@@ -199,6 +199,20 @@
     "setPosition": "Set new position",
     "pickPosition": "Click on the map to set the position of {{name}}",
     "symbolSize": "Symbol size",
-    "settings": "Map settings"
+    "settings": "Map settings",
+    "showHistory": "Show GPS history",
+    "hideHistory": "Hide GPS history",
+    "historyOf_one": "GPS history of {{name}}: {{count}} position",
+    "historyOf_other": "GPS history of {{name}}: {{count}} positions",
+    "historySpan": "Time span",
+    "spanAll": "All",
+    "spanHours_one": "Last hour",
+    "spanHours_other": "Last {{count}} hours",
+    "spanDays_one": "Last day",
+    "spanDays_other": "Last {{count}} days",
+    "spanCustom": "Custom timeframe",
+    "rangeFrom": "From",
+    "rangeTo": "To",
+    "rangeInvalid": "Must not be before From"
   }
 }

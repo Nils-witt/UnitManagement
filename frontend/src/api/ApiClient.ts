@@ -190,9 +190,17 @@ export class ApiClient {
     return this.sendJsonForJson(`/api/units/${id}`, 'PUT', input);
   }
 
-  /** The unit's position history, newest measurement first. */
-  listUnitPositions(id: string): Promise<PositionHistoryEntry[]> {
-    return this.getJson(`/api/units/${id}/positions`);
+  /** The unit's position history, newest measurement first; `since` and `to`
+   * (RFC 3339) limit it to positions measured in that timeframe. */
+  listUnitPositions(
+    id: string,
+    range: { since?: string; to?: string } = {},
+  ): Promise<PositionHistoryEntry[]> {
+    const params = new URLSearchParams();
+    if (range.since) params.set('since', range.since);
+    if (range.to) params.set('to', range.to);
+    const query = params.size > 0 ? `?${params}` : '';
+    return this.getJson(`/api/units/${id}/positions${query}`);
   }
 
   deleteUnit(id: string): Promise<void> {

@@ -29,6 +29,8 @@ export default defineConfig({
       },
     },
   },
+  // MapLibre starts its worker as an ES module (see MapPage.tsx).
+  worker: { format: 'es' },
   server: {
     // During `npm run dev`, forward API calls (and the unit event
     // WebSocket) to the Go server.

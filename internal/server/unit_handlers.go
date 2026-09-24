@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -187,21 +188,46 @@ func (s *Server) handleGetUnit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toUnitResponse(unit))
 }
 
+// parseHistoryQuery reads the optional limit, since and to parameters of the
+// position history. since and to are zero when absent.
+func parseHistoryQuery(q url.Values) (limit int, since, to time.Time, err error) {
+	limit = units.MaxHistoryLimit
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > units.MaxHistoryLimit {
+			return 0, time.Time{}, time.Time{}, fmt.Errorf("limit must be between 1 and %d", units.MaxHistoryLimit)
+		}
+		limit = n
+	}
+	if v := q.Get("since"); v != "" {
+		since, err = time.Parse(time.RFC3339, v)
+		if err != nil {
+			return 0, time.Time{}, time.Time{}, errors.New("since must be an RFC 3339 timestamp")
+		}
+	}
+	if v := q.Get("to"); v != "" {
+		to, err = time.Parse(time.RFC3339, v)
+		if err != nil {
+			return 0, time.Time{}, time.Time{}, errors.New("to must be an RFC 3339 timestamp")
+		}
+		if !since.IsZero() && to.Before(since) {
+			return 0, time.Time{}, time.Time{}, errors.New("to must not be before since")
+		}
+	}
+	return limit, since, to, nil
+}
+
 func (s *Server) handleUnitPositions(w http.ResponseWriter, r *http.Request) {
 	id, ok := unitIDFromPath(w, r)
 	if !ok {
 		return
 	}
-	limit := units.MaxHistoryLimit
-	if v := r.URL.Query().Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > units.MaxHistoryLimit {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("limit must be between 1 and %d", units.MaxHistoryLimit))
-			return
-		}
-		limit = n
+	limit, since, to, err := parseHistoryQuery(r.URL.Query())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	history, err := s.units.History(r.Context(), id, limit)
+	history, err := s.units.History(r.Context(), id, limit, since, to)
 	if err != nil {
 		writeUnitError(w, err)
 		return

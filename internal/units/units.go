@@ -178,8 +178,9 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // History returns up to limit entries of the unit's position history, newest
-// measurement first.
-func (s *Service) History(ctx context.Context, id uuid.UUID, limit int) ([]models.UnitPosition, error) {
+// measurement first. A non-zero since leaves out positions measured before it,
+// a non-zero to those measured after it.
+func (s *Service) History(ctx context.Context, id uuid.UUID, limit int, since, to time.Time) ([]models.UnitPosition, error) {
 	if limit <= 0 || limit > MaxHistoryLimit {
 		limit = MaxHistoryLimit
 	}
@@ -191,9 +192,15 @@ func (s *Service) History(ctx context.Context, id uuid.UUID, limit int) ([]model
 	if count == 0 {
 		return nil, ErrUnitNotFound
 	}
+	query := s.db.WithContext(ctx).Preload("RecordedBy").Where("unit_id = ?", id)
+	if !since.IsZero() {
+		query = query.Where("timestamp >= ?", since)
+	}
+	if !to.IsZero() {
+		query = query.Where("timestamp <= ?", to)
+	}
 	var history []models.UnitPosition
-	err := s.db.WithContext(ctx).Preload("RecordedBy").
-		Where("unit_id = ?", id).
+	err := query.
 		Order("timestamp DESC").Order("id DESC").
 		Limit(limit).
 		Find(&history).Error

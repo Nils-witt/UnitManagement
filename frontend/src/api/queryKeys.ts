@@ -7,6 +7,9 @@ export const queryKeys = {
   userTokens: (id: number) => ['users', 'tokens', id] as const,
   groups: ['groups', 'list'] as const,
   units: ['units', 'list'] as const,
+  // Prefix of every history of the unit, whatever its timeframe.
   unitPositions: (id: string) => ['units', 'positions', id] as const,
+  unitPositionsRange: (id: string, since: string | null, to: string | null) =>
+    ['units', 'positions', id, since, to] as const,
   version: ['version'] as const,
 };

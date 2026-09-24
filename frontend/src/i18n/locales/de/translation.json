@@ -199,6 +199,20 @@
     "setPosition": "Neue Position setzen",
     "pickPosition": "Klicken Sie auf die Karte, um die Position von {{name}} zu setzen",
     "symbolSize": "Symbolgröße",
-    "settings": "Karteneinstellungen"
+    "settings": "Karteneinstellungen",
+    "showHistory": "GPS-Verlauf anzeigen",
+    "hideHistory": "GPS-Verlauf ausblenden",
+    "historyOf_one": "GPS-Verlauf von {{name}}: {{count}} Position",
+    "historyOf_other": "GPS-Verlauf von {{name}}: {{count}} Positionen",
+    "historySpan": "Zeitraum",
+    "spanAll": "Alle",
+    "spanHours_one": "Letzte Stunde",
+    "spanHours_other": "Letzte {{count}} Stunden",
+    "spanDays_one": "Letzter Tag",
+    "spanDays_other": "Letzte {{count}} Tage",
+    "spanCustom": "Eigener Zeitraum",
+    "rangeFrom": "Von",
+    "rangeTo": "Bis",
+    "rangeInvalid": "Darf nicht vor Von liegen"
   }
 }

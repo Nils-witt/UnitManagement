@@ -593,6 +593,22 @@ paths:
             minimum: 1
             maximum: 1000
             default: 1000
+        - name: since
+          in: query
+          description: >
+            Only positions measured at or after this time (RFC 3339). The limit
+            still applies, keeping the newest entries.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: >
+            Only positions measured at or before this time (RFC 3339), for a
+            timeframe that ends in the past. Must not be before `since`.
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
           description: The position history.

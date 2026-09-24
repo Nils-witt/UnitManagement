@@ -10,23 +10,31 @@ import {
   Paper,
   Popover,
   Slider,
+  TextField,
   Typography,
 } from '@mui/material';
 import PlaceIcon from '@mui/icons-material/Place';
+import RouteIcon from '@mui/icons-material/Route';
 import TuneIcon from '@mui/icons-material/Tune';
 import { useTranslation } from 'react-i18next';
 import * as maplibregl from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { Position, Unit } from '../api/types';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import type { Position, PositionHistoryEntry, Unit } from '../api/types';
 import ErrorBanner from '../components/ErrorBanner';
 import { useApi } from '../hooks/useApi';
+import { useUnitPositions } from '../hooks/useUnitPositions';
 import { useUnits } from '../hooks/useUnits';
 import { errorMessage } from '../lib/errors';
 import { fmtDate } from '../lib/format';
 import { formatTacticalName } from '../lib/tacticalName';
 import { symbolDataUrl } from '../lib/unitSymbol';
 import './MapPage.scss';
+
+// MapLibre looks for its worker next to its own module, which bundling
+// moves; without it, GeoJSON sources (the GPS track) never render.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 type PlacedUnit = Unit & { position: Position };
 
@@ -66,6 +74,62 @@ const MAX_SYMBOL_HEIGHT = 100;
 const DOT_RATIO = 0.4;
 const SYMBOL_HEIGHT_KEY = 'map.symbolHeight';
 
+// The GPS track of one unit, drawn below the markers. MapLibre paints the
+// layers itself, so the color can't come from the MUI theme.
+const TRACK_SOURCE = 'gps-track';
+const TRACK_COLOR = '#d32f2f';
+
+// How far back the track reaches, in hours; null shows all of it (as far as
+// the server returns, the latest 1000 positions), 'custom' a timeframe the
+// user enters.
+const TRACK_SPANS = [1, 6, 24, 24 * 7, null, 'custom'] as const;
+type TrackSpan = (typeof TRACK_SPANS)[number];
+type PresetSpan = Exclude<TrackSpan, 'custom'>;
+const DEFAULT_TRACK_SPAN = 1 satisfies PresetSpan;
+const TRACK_SPAN_KEY = 'map.trackSpan';
+const HOUR_MS = 3_600_000;
+
+/** A custom timeframe, as values of datetime-local inputs (local time); an
+ * empty one leaves that end open. */
+interface TrackRange {
+  from: string;
+  to: string;
+}
+
+/** The preset span the user picked last, from localStorage. A custom
+ * timeframe isn't remembered, as it rarely fits a later visit. */
+function loadTrackSpan(): PresetSpan {
+  try {
+    const stored = localStorage.getItem(TRACK_SPAN_KEY);
+    const span = TRACK_SPANS.find((s) => String(s) === stored);
+    if (span !== undefined && span !== 'custom') return span;
+  } catch {
+    // Storage may be unavailable, e.g. in a private window.
+  }
+  return DEFAULT_TRACK_SPAN;
+}
+
+/** The value of a datetime-local input showing `ms` in local time. */
+function toLocalInput(ms: number): string {
+  const offsetMs = new Date(ms).getTimezoneOffset() * 60_000;
+  return new Date(ms - offsetMs).toISOString().slice(0, 16);
+}
+
+/** RFC 3339 for a datetime-local value, plus `extraMs`; null when empty or
+ * incomplete. */
+function fromLocalInput(value: string, extraMs = 0): string | null {
+  const ms = new Date(value).getTime();
+  return value && !Number.isNaN(ms) ? new Date(ms + extraMs).toISOString() : null;
+}
+
+function saveTrackSpan(span: PresetSpan) {
+  try {
+    localStorage.setItem(TRACK_SPAN_KEY, String(span));
+  } catch {
+    // Not remembered then; the span still applies until the page is left.
+  }
+}
+
 /** The symbol height the user picked last, from localStorage. */
 function loadSymbolHeight(): number {
   try {
@@ -97,6 +161,12 @@ export default function MapPage() {
   const [error, setError] = useState<string | null>(null);
   const [symbolHeight, setSymbolHeight] = useState(loadSymbolHeight);
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+  // Sources and layers can only be added once the style has loaded.
+  const [styleLoaded, setStyleLoaded] = useState(false);
+  // The unit whose GPS history is shown on the map.
+  const [trackId, setTrackId] = useState<string | null>(null);
+  const [trackSpan, setTrackSpan] = useState<TrackSpan>(loadTrackSpan);
+  const [trackRange, setTrackRange] = useState<TrackRange>({ from: '', to: '' });
 
   const placed = useMemo(() => units.filter((u): u is PlacedUnit => u.position !== null), [units]);
 
@@ -109,10 +179,12 @@ export default function MapPage() {
     });
     m.addControl(new maplibregl.NavigationControl());
     m.addControl(new maplibregl.ScaleControl());
+    m.once('style.load', () => setStyleLoaded(true));
     setMap(m);
     return () => {
       m.remove();
       setMap(null);
+      setStyleLoaded(false);
     };
   }, []);
 
@@ -159,6 +231,60 @@ export default function MapPage() {
     };
   }, [map, movingUnit, api, reloadUnits]);
 
+  // The track is hidden if the unit is deleted meanwhile.
+  const trackUnit = trackId === null ? null : (units.find((u) => u.id === trackId) ?? null);
+  // For a preset, the server returns the span as of when it was picked (or
+  // the track opened); from then on the window moves along with a clock
+  // ticking once a minute, filtered here so the track isn't refetched every
+  // minute. A custom timeframe is fixed.
+  const [fetchedAt, setFetchedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(fetchedAt);
+  const isCustom = trackSpan === 'custom';
+  const rangeSince = isCustom ? fromLocalInput(trackRange.from) : null;
+  // The inputs have minute precision; To includes all of its minute.
+  const rangeTo = isCustom ? fromLocalInput(trackRange.to, 59_999) : null;
+  // Not fetched while the end is before the start; the field shows why.
+  const rangeInvalid = rangeSince !== null && rangeTo !== null && rangeTo < rangeSince;
+  const since = isCustom
+    ? rangeSince
+    : trackSpan === null
+      ? null
+      : new Date(fetchedAt - trackSpan * HOUR_MS).toISOString();
+  const { data: history, error: trackError } = useUnitPositions(
+    rangeInvalid ? null : (trackUnit?.id ?? null),
+    since,
+    rangeTo,
+  );
+  useEffect(() => {
+    if (trackId === null || trackSpan === null || trackSpan === 'custom') return;
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, [trackId, trackSpan]);
+  const track = useMemo(() => {
+    if (trackSpan === null || trackSpan === 'custom') return history;
+    const cutoff = now - trackSpan * HOUR_MS;
+    return history.filter((p) => Date.parse(p.timestamp) >= cutoff);
+  }, [history, trackSpan, now]);
+
+  const resetClock = () => {
+    const time = Date.now();
+    setFetchedAt(time);
+    setNow(time);
+  };
+
+  const changeTrackSpan = (span: TrackSpan) => {
+    if (span === 'custom') {
+      // Starts from the timeframe shown so far, then the user adjusts it.
+      const time = Date.now();
+      const hours = typeof trackSpan === 'number' ? trackSpan : DEFAULT_TRACK_SPAN;
+      setTrackRange({ from: toLocalInput(time - hours * HOUR_MS), to: toLocalInput(time) });
+    } else {
+      resetClock();
+      saveTrackSpan(span);
+    }
+    setTrackSpan(span);
+  };
+
   const openMenu = (unit: PlacedUnit, e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -171,13 +297,28 @@ export default function MapPage() {
     setMenu(null);
   };
 
+  const toggleTrack = () => {
+    if (!menu) return;
+    resetClock();
+    setTrackId(trackId === menu.unit.id ? null : menu.unit.id);
+    setMenu(null);
+  };
+
   return (
     <Paper
       className="map-page"
       style={{ '--map-symbol-height': `${symbolHeight}px` } as CSSProperties}
     >
-      <ErrorBanner message={error ?? loadError} />
+      <ErrorBanner message={error ?? loadError ?? trackError} />
       <div ref={containerRef} className="map-page__map" />
+      {map && styleLoaded && trackUnit && (
+        // Remounted on a new timeframe, so the view fits the new track.
+        <GpsTrack
+          key={`${trackUnit.id}-${trackSpan}-${since}-${rangeTo}`}
+          map={map}
+          positions={track}
+        />
+      )}
       {map &&
         placed.map((u) => (
           <UnitMarker
@@ -209,6 +350,14 @@ export default function MapPage() {
             <PlaceIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>{t('map.setPosition')}</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={toggleTrack}>
+          <ListItemIcon>
+            <RouteIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>
+            {menu?.unit.id === trackId ? t('map.hideHistory') : t('map.showHistory')}
+          </ListItemText>
         </MenuItem>
       </Menu>
       <IconButton
@@ -242,6 +391,64 @@ export default function MapPage() {
           />
         </div>
       </Popover>
+      {trackUnit && (
+        <div className="map-page__hint map-page__hint--top">
+          <Typography variant="body2">
+            {t('map.historyOf', { name: trackUnit.name, count: track.length })}
+          </Typography>
+          <TextField
+            select
+            size="small"
+            variant="standard"
+            // Matches the text next to it.
+            sx={{ '& .MuiInputBase-root': { typography: 'body2' } }}
+            aria-label={t('map.historySpan')}
+            value={String(trackSpan)}
+            onChange={(e) =>
+              changeTrackSpan(
+                TRACK_SPANS.find((s) => String(s) === e.target.value) ?? DEFAULT_TRACK_SPAN,
+              )
+            }
+          >
+            {TRACK_SPANS.map((span) => (
+              <MenuItem key={String(span)} value={String(span)}>
+                {span === 'custom'
+                  ? t('map.spanCustom')
+                  : span === null
+                    ? t('map.spanAll')
+                    : span < 24
+                      ? t('map.spanHours', { count: span })
+                      : t('map.spanDays', { count: span / 24 })}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Button size="small" onClick={() => setTrackId(null)}>
+            {t('map.hideHistory')}
+          </Button>
+          {isCustom && (
+            <div className="map-page__range">
+              <TextField
+                type="datetime-local"
+                size="small"
+                label={t('map.rangeFrom')}
+                value={trackRange.from}
+                onChange={(e) => setTrackRange({ ...trackRange, from: e.target.value })}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                type="datetime-local"
+                size="small"
+                label={t('map.rangeTo')}
+                value={trackRange.to}
+                onChange={(e) => setTrackRange({ ...trackRange, to: e.target.value })}
+                error={rangeInvalid}
+                helperText={rangeInvalid ? t('map.rangeInvalid') : undefined}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </div>
+          )}
+        </div>
+      )}
       {movingUnit && (
         <div className="map-page__hint">
           <Typography variant="body2">
@@ -259,6 +466,80 @@ export default function MapPage() {
       )}
     </Paper>
   );
+}
+
+/** Draws a unit's position history as a line through its measurements,
+ * oldest to newest. The view fits the track once it has first loaded. */
+function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: PositionHistoryEntry[] }) {
+  useEffect(() => {
+    map.addSource(TRACK_SOURCE, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+    map.addLayer({
+      id: `${TRACK_SOURCE}-line`,
+      type: 'line',
+      source: TRACK_SOURCE,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': TRACK_COLOR, 'line-width': 3, 'line-opacity': 0.8 },
+    });
+    map.addLayer({
+      id: `${TRACK_SOURCE}-points`,
+      type: 'circle',
+      source: TRACK_SOURCE,
+      filter: ['==', ['geometry-type'], 'Point'],
+      paint: {
+        'circle-radius': 4,
+        'circle-color': '#fff',
+        'circle-stroke-color': TRACK_COLOR,
+        'circle-stroke-width': 2,
+      },
+    });
+    return () => {
+      map.removeLayer(`${TRACK_SOURCE}-points`);
+      map.removeLayer(`${TRACK_SOURCE}-line`);
+      map.removeSource(TRACK_SOURCE);
+    };
+  }, [map]);
+
+  // The history comes newest first; sorted by measurement time so the line
+  // follows the unit's actual path.
+  const coordinates = useMemo(
+    () =>
+      positions
+        .toSorted((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
+        .map((p) => [p.lon, p.lat]),
+    [positions],
+  );
+
+  useEffect(() => {
+    map.getSource<maplibregl.GeoJSONSource>(TRACK_SOURCE)?.setData({
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } },
+        ...coordinates.map((c) => ({
+          type: 'Feature' as const,
+          properties: {},
+          geometry: { type: 'Point' as const, coordinates: c },
+        })),
+      ],
+    });
+  }, [map, coordinates]);
+
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current || coordinates.length === 0) return;
+    fitted.current = true;
+    const bounds = new maplibregl.LngLatBounds();
+    for (const c of coordinates) bounds.extend(c as [number, number]);
+    // More room at the top, where the history bar covers the map.
+    map.fitBounds(bounds, {
+      padding: { top: 140, bottom: 60, left: 60, right: 60 },
+      maxZoom: MAX_FIT_ZOOM,
+    });
+  }, [map, coordinates]);
+
+  return null;
 }
 
 /** A MapLibre marker whose element and popup are rendered by React. */

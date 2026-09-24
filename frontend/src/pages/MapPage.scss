@@ -91,3 +91,22 @@
   width: 200px;
   padding: 8px 16px 0;
 }
+
+// Above the map instead, so it doesn't collide with the position hint.
+.map-page__hint--top {
+  top: 10px;
+  bottom: auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  // Leaves room for the settings button and navigation controls.
+  max-width: calc(100% - 120px);
+}
+
+// The custom timeframe, on its own line below the rest of the bar.
+.map-page__range {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 8px 4px 0;
+}

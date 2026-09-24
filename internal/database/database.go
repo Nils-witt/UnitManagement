@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -14,7 +15,15 @@ import (
 
 func Connect(dsn string) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: logger.NewSlogLogger(slog.Default(), logger.Config{
+			LogLevel:      logger.Warn,
+			SlowThreshold: 200 * time.Millisecond,
+			// Failed and slow queries are logged with placeholders instead of
+			// their values, which can be password hashes or session tokens.
+			ParameterizedQueries: true,
+			// Callers handle a missing row; it is not worth an error line.
+			IgnoreRecordNotFoundError: true,
+		}),
 		// Every write here is a single statement, so GORM's implicit
 		// BEGIN/COMMIT around Create/Delete only adds two round trips.
 		SkipDefaultTransaction: true,

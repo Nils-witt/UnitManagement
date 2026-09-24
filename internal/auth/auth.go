@@ -65,8 +65,7 @@ func (s *Service) EnsureAdmin(ctx context.Context, username, password string) (b
 	if password == "" {
 		return false, ErrAdminPasswordRequired
 	}
-	// Checked up front because a failed INSERT is logged with its values,
-	// which include the password hash.
+	// Checked up front so the expected case doesn't log a failed INSERT.
 	var taken int64
 	if err := s.db.WithContext(ctx).Model(&models.User{}).Where("username = ?", strings.TrimSpace(username)).Count(&taken).Error; err != nil {
 		return false, err

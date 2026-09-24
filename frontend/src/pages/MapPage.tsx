@@ -78,6 +78,9 @@ const SYMBOL_HEIGHT_KEY = 'map.symbolHeight';
 // layers itself, so the color can't come from the MUI theme.
 const TRACK_SOURCE = 'gps-track';
 const TRACK_COLOR = '#d32f2f';
+const TRACK_POINTS_LAYER = `${TRACK_SOURCE}-points`;
+// Including the stroke; also the popup's offset and the extra hit area.
+const TRACK_POINT_RADIUS = 6;
 
 // How far back the track reaches, in hours; null shows all of it (as far as
 // the server returns, the latest 1000 positions), 'custom' a timeframe the
@@ -469,8 +472,22 @@ export default function MapPage() {
 }
 
 /** Draws a unit's position history as a line through its measurements,
- * oldest to newest. The view fits the track once it has first loaded. */
+ * oldest to newest. The view fits the track once it has first loaded;
+ * clicking a point shows its details in a popup. */
 function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: PositionHistoryEntry[] }) {
+  const [selected, setSelected] = useState<PositionHistoryEntry | null>(null);
+  const [popupContent] = useState(() => document.createElement('div'));
+  // Closed by the click handler below instead, as its own would also close
+  // the popup when another point is clicked.
+  const [popup] = useState(
+    () =>
+      new maplibregl.Popup({
+        className: 'map-page__popup',
+        closeOnClick: false,
+        offset: TRACK_POINT_RADIUS,
+      }),
+  );
+
   useEffect(() => {
     map.addSource(TRACK_SOURCE, {
       type: 'geojson',
@@ -484,7 +501,7 @@ function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: Position
       paint: { 'line-color': TRACK_COLOR, 'line-width': 3, 'line-opacity': 0.8 },
     });
     map.addLayer({
-      id: `${TRACK_SOURCE}-points`,
+      id: TRACK_POINTS_LAYER,
       type: 'circle',
       source: TRACK_SOURCE,
       filter: ['==', ['geometry-type'], 'Point'],
@@ -496,7 +513,7 @@ function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: Position
       },
     });
     return () => {
-      map.removeLayer(`${TRACK_SOURCE}-points`);
+      map.removeLayer(TRACK_POINTS_LAYER);
       map.removeLayer(`${TRACK_SOURCE}-line`);
       map.removeSource(TRACK_SOURCE);
     };
@@ -504,27 +521,80 @@ function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: Position
 
   // The history comes newest first; sorted by measurement time so the line
   // follows the unit's actual path.
-  const coordinates = useMemo(
-    () =>
-      positions
-        .toSorted((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
-        .map((p) => [p.lon, p.lat]),
+  const sorted = useMemo(
+    () => positions.toSorted((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)),
     [positions],
   );
+  const coordinates = useMemo(() => sorted.map((p) => [p.lon, p.lat]), [sorted]);
 
   useEffect(() => {
     map.getSource<maplibregl.GeoJSONSource>(TRACK_SOURCE)?.setData({
       type: 'FeatureCollection',
       features: [
         { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } },
-        ...coordinates.map((c) => ({
+        // The index into `sorted`, to find the entry of a clicked point.
+        ...coordinates.map((c, index) => ({
           type: 'Feature' as const,
-          properties: {},
+          properties: { index },
           geometry: { type: 'Point' as const, coordinates: c },
         })),
       ],
     });
   }, [map, coordinates]);
+
+  // A click on a point selects it, anywhere else on the map closes the popup.
+  // The hit area is a little larger than the point, for touch screens.
+  useEffect(() => {
+    const canvas = map.getCanvas();
+    const pointAt = ({ x, y }: maplibregl.Point) => {
+      const r = TRACK_POINT_RADIUS;
+      const [feature] = map.queryRenderedFeatures(
+        [
+          [x - r, y - r],
+          [x + r, y + r],
+        ],
+        { layers: [TRACK_POINTS_LAYER] },
+      );
+      const index: unknown = feature?.properties.index;
+      return typeof index === 'number' ? (sorted[index] ?? null) : null;
+    };
+    const onClick = (e: maplibregl.MapMouseEvent) => setSelected(pointAt(e.point));
+    // Leaves other cursors, like the crosshair while moving a unit, alone.
+    let hovering = false;
+    const onMouseMove = (e: maplibregl.MapMouseEvent) => {
+      const over = pointAt(e.point) !== null;
+      if (over === hovering) return;
+      hovering = over;
+      canvas.style.cursor = over ? 'pointer' : '';
+    };
+    map.on('click', onClick);
+    map.on('mousemove', onMouseMove);
+    return () => {
+      map.off('click', onClick);
+      map.off('mousemove', onMouseMove);
+      if (hovering) canvas.style.cursor = '';
+    };
+  }, [map, sorted]);
+
+  useEffect(() => {
+    popup.setDOMContent(popupContent);
+    const onClose = () => setSelected(null);
+    popup.on('close', onClose);
+    return () => {
+      popup.off('close', onClose);
+      popup.remove();
+    };
+  }, [popup, popupContent]);
+
+  useEffect(() => {
+    if (!selected) {
+      popup.remove();
+      return;
+    }
+    popup.setLngLat([selected.lon, selected.lat]);
+    // Adding it again would first close it, clearing the selection.
+    if (!popup.isOpen()) popup.addTo(map);
+  }, [map, popup, selected]);
 
   const fitted = useRef(false);
   useEffect(() => {
@@ -539,7 +609,25 @@ function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: Position
     });
   }, [map, coordinates]);
 
-  return null;
+  return selected && createPortal(<TrackPointPopupContent entry={selected} />, popupContent);
+}
+
+function TrackPointPopupContent({ entry }: { entry: PositionHistoryEntry }) {
+  const { t, i18n } = useTranslation();
+  const { lat, lon, height, timestamp, recordedAt, recordedBy } = entry;
+  return (
+    <>
+      <strong>{fmtDate(timestamp, i18n.language)}</strong>
+      <div>
+        {lat.toFixed(5)}, {lon.toFixed(5)}
+        {height !== null && ` · ${t('unitRow.height', { height })}`}
+      </div>
+      <div className="map-page__popup-time">
+        {t('unitHistory.recorded')}: {fmtDate(recordedAt, i18n.language)}{' '}
+        {t('unitRow.by', { name: recordedBy?.username ?? t('unitRow.deletedUser') })}
+      </div>
+    </>
+  );
 }
 
 /** A MapLibre marker whose element and popup are rendered by React. */

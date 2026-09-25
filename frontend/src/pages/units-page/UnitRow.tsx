@@ -40,6 +40,8 @@ export default function UnitRow({
           <>
             {p.lat.toFixed(6)}, {p.lon.toFixed(6)}
             {p.height != null && ` · ${t('unitRow.height', { height: p.height.toFixed(1) })}`}
+            {p.accuracy != null &&
+              ` · ${t('unitRow.accuracy', { accuracy: p.accuracy.toFixed(1) })}`}
             <Typography variant="caption" color="text.secondary" component="div">
               {fmtDate(p.timestamp, i18n.language)}
             </Typography>

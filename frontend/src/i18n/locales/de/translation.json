@@ -148,12 +148,15 @@
     "lonHint": "−180 bis 180°",
     "heightLabel": "Höhe",
     "heightHint": "Meter, optional",
+    "accuracyLabel": "Genauigkeit",
+    "accuracyHint": "Meter, optional",
     "editTitle": "{{name}} bearbeiten",
     "newTitle": "Neue Einheit"
   },
   "unitRow": {
     "noPosition": "Keine Position",
     "height": "{{height}} m",
+    "accuracy": "±{{accuracy}} m",
     "by": "von {{name}}",
     "deletedUser": "gelöschtem Benutzer",
     "editAria": "{{name}} bearbeiten",
@@ -165,6 +168,7 @@
     "title": "Positionsverlauf von {{name}}",
     "measured": "Gemessen",
     "height": "Höhe",
+    "accuracy": "Genauigkeit",
     "recorded": "Erfasst",
     "empty": "Noch keine Positionen erfasst"
   },

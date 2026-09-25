@@ -7,7 +7,16 @@ info:
     Authentication uses a JWT access token sent as `Authorization: Bearer <token>`.
     It is returned by `POST /api/auth/login` or handed to the web UI at the end
     of the SSO flow, and is valid until it expires or its session is ended
-    (sign-out, password reset, account deletion). Errors are returned as `{"error": "<message>"}`.
+    (sign-out, password reset, account deletion).
+
+    When `OIDC_ACCESS_TOKEN_AUDIENCE` is set, a JWT access token issued by the
+    SSO provider (or by an issuer in `OIDC_ACCESS_TOKEN_ISSUERS`) is accepted
+    as the bearer token too, without signing in first. It must be signed with
+    the issuer's published keys, unexpired, and carry one of the configured
+    audiences in `aud`; ID tokens and opaque tokens are rejected. Its `sub`
+    resolves to the linked account, which is created on first use.
+
+    Errors are returned as `{"error": "<message>"}`.
     Request bodies are limited to 1 MiB.
   version: 1.0.0
 servers:
@@ -681,6 +690,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        An access token from `POST /api/auth/login`, the SSO flow or
+        `POST /api/users/{id}/tokens`, or, when enabled, a JWT access token
+        from a trusted OIDC provider.
 
   parameters:
     UserId:
@@ -985,6 +998,11 @@ components:
           type: [number, "null"]
           format: double
           description: Height in meters; null when unknown.
+        accuracy:
+          type: [number, "null"]
+          format: double
+          minimum: 0
+          description: Horizontal accuracy radius in meters; null when unknown.
         timestamp:
           type: [string, "null"]
           format: date-time

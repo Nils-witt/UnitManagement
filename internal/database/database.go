@@ -67,8 +67,8 @@ func Connect(dsn string) (*gorm.DB, error) {
 	// position. Afterwards every unit's position is in its history, so this
 	// finds nothing.
 	err = db.Exec(`
-		INSERT INTO unit_positions (unit_id, latitude, longitude, height, timestamp, created_at, recorded_by_id)
-		SELECT u.id, u.latitude, u.longitude, u.height, u.position_timestamp, now(), u.updated_by_id
+		INSERT INTO unit_positions (unit_id, latitude, longitude, height, accuracy, timestamp, created_at, recorded_by_id)
+		SELECT u.id, u.latitude, u.longitude, u.height, u.accuracy, u.position_timestamp, now(), u.updated_by_id
 		FROM units u
 		WHERE u.latitude IS NOT NULL AND u.longitude IS NOT NULL AND u.position_timestamp IS NOT NULL
 			AND NOT EXISTS (SELECT 1 FROM unit_positions p WHERE p.unit_id = u.id)`).Error

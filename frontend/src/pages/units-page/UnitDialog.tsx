@@ -39,6 +39,9 @@ function UnitForm({
   const [lat, setLat] = useState(initial ? String(initial.lat) : '');
   const [lon, setLon] = useState(initial ? String(initial.lon) : '');
   const [height, setHeight] = useState(initial?.height != null ? String(initial.height) : '');
+  const [accuracy, setAccuracy] = useState(
+    initial?.accuracy != null ? String(initial.accuracy) : '',
+  );
   const [symbol, setSymbol] = useState(unit?.symbol ?? {});
   const [tacticalName, setTacticalName] = useState(unit?.tacticalName ?? {});
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +53,14 @@ function UnitForm({
   const latInvalid = hasPosition && lat.trim() !== '' && !inRange(latValue, 90);
   const lonInvalid = hasPosition && lon.trim() !== '' && !inRange(lonValue, 180);
   const heightInvalid = hasPosition && heightValue !== null && !Number.isFinite(heightValue);
+  const accuracyValue = accuracy.trim() === '' ? null : parseDecimal(accuracy);
+  const accuracyInvalid =
+    hasPosition &&
+    accuracyValue !== null &&
+    !(Number.isFinite(accuracyValue) && accuracyValue >= 0);
   const positionIncomplete =
-    hasPosition && (!inRange(latValue, 90) || !inRange(lonValue, 180) || heightInvalid);
+    hasPosition &&
+    (!inRange(latValue, 90) || !inRange(lonValue, 180) || heightInvalid || accuracyInvalid);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -59,14 +68,15 @@ function UnitForm({
     setSubmitting(true);
     let position: UnitInput['position'] = null;
     if (hasPosition) {
-      position = { lat: latValue, lon: lonValue, height: heightValue };
+      position = { lat: latValue, lon: lonValue, height: heightValue, accuracy: accuracyValue };
       // An unchanged position keeps when it was measured; a new one is
       // stamped with the current time by the server.
       if (
         initial &&
         initial.lat === latValue &&
         initial.lon === lonValue &&
-        initial.height === heightValue
+        initial.height === heightValue &&
+        initial.accuracy === accuracyValue
       ) {
         position.timestamp = initial.timestamp;
       }
@@ -140,6 +150,15 @@ function UnitForm({
             helperText={t('unitDialog.heightHint')}
             value={height}
             onChange={(e) => setHeight(e.target.value)}
+          />
+          <TextField
+            label={t('unitDialog.accuracyLabel')}
+            size="small"
+            slotProps={{ htmlInput: { inputMode: 'decimal' } }}
+            error={accuracyInvalid}
+            helperText={t('unitDialog.accuracyHint')}
+            value={accuracy}
+            onChange={(e) => setAccuracy(e.target.value)}
           />
         </Stack>
       )}

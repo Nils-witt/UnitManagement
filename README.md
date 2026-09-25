@@ -77,7 +77,7 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | DELETE | `/api/users/{id}`  | Delete user (admin)                  |
 | GET    | `/api/groups`      | List groups with members (admin)     |
 | GET    | `/api/units`       | List units                           |
-| POST   | `/api/units`       | `{name, position?: {lat, lon, height?, timestamp?}, symbol?, tacticalName?}` |
+| POST   | `/api/units`       | `{name, position?: {lat, lon, height?, accuracy?, timestamp?}, symbol?, tacticalName?}` |
 | GET    | `/api/units/events` | WebSocket pushing `{type, id, unit?}` on every unit create/update/delete |
 | GET    | `/api/units/{id}`  | Get unit by UUID                     |
 | GET    | `/api/units/{id}/positions?limit=&since=&to=` | Position history, newest first; `since` and `to` (RFC 3339) limit it to measurements in that timeframe |

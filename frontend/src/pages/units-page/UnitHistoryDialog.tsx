@@ -28,6 +28,7 @@ function HistoryTable({ unit }: { unit: Unit }) {
               <TableCell>{t('unitHistory.measured')}</TableCell>
               <TableCell>{t('unitsListCard.position')}</TableCell>
               <TableCell>{t('unitHistory.height')}</TableCell>
+              <TableCell>{t('unitHistory.accuracy')}</TableCell>
               <TableCell>{t('unitHistory.recorded')}</TableCell>
             </TableRow>
           </TableHead>
@@ -40,6 +41,11 @@ function HistoryTable({ unit }: { unit: Unit }) {
                 </TableCell>
                 <TableCell>
                   {p.height != null ? t('unitRow.height', { height: p.height.toFixed(1) }) : '–'}
+                </TableCell>
+                <TableCell>
+                  {p.accuracy != null
+                    ? t('unitRow.accuracy', { accuracy: p.accuracy.toFixed(1) })
+                    : '–'}
                 </TableCell>
                 <TableCell>
                   {fmtDate(p.recordedAt, i18n.language)}

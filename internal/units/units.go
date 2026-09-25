@@ -29,7 +29,7 @@ var (
 	ErrUnitNotFound        = errors.New("unit not found")
 	ErrNameTaken           = errors.New("unit name is already taken")
 	ErrInvalidName         = fmt.Errorf("unit name must be 1 to %d characters", MaxNameLength)
-	ErrInvalidPosition     = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, and height finite")
+	ErrInvalidPosition     = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, height finite, and accuracy finite and not negative")
 	ErrInvalidSymbol       = errors.New("symbol components must be IDs of lowercase letters, digits and dashes")
 	ErrInvalidTacticalName = fmt.Errorf("tactical name parts must be at most %d characters without control characters", MaxTacticalNamePartLength)
 )
@@ -43,7 +43,9 @@ type Position struct {
 	Latitude  float64
 	Longitude float64
 	// Height is nil when unknown.
-	Height    *float64
+	Height *float64
+	// Accuracy is the horizontal accuracy radius in meters, nil when unknown.
+	Accuracy  *float64
 	Timestamp time.Time
 }
 
@@ -221,6 +223,7 @@ func recordPosition(tx *gorm.DB, unit *models.Unit, by *models.User) error {
 		Latitude:     *unit.Latitude,
 		Longitude:    *unit.Longitude,
 		Height:       unit.Height,
+		Accuracy:     unit.Accuracy,
 		Timestamp:    *unit.PositionTimestamp,
 		RecordedByID: &by.ID,
 	}
@@ -240,7 +243,7 @@ func samePosition(a, b *models.Unit) bool {
 		return true
 	}
 	return *a.Latitude == *b.Latitude && *a.Longitude == *b.Longitude &&
-		equalPtr(a.Height, b.Height) && a.PositionTimestamp.Equal(*b.PositionTimestamp)
+		equalPtr(a.Height, b.Height) && equalPtr(a.Accuracy, b.Accuracy) && a.PositionTimestamp.Equal(*b.PositionTimestamp)
 }
 
 func equalPtr[T comparable](a, b *T) bool {
@@ -259,6 +262,7 @@ func inputOf(unit *models.Unit) Input {
 			Latitude:  *unit.Latitude,
 			Longitude: *unit.Longitude,
 			Height:    unit.Height,
+			Accuracy:  unit.Accuracy,
 			Timestamp: *unit.PositionTimestamp,
 		}
 	}
@@ -286,16 +290,17 @@ func apply(unit *models.Unit, in Input) error {
 	unit.TacticalName = tacticalName
 
 	if in.Position == nil {
-		unit.Latitude, unit.Longitude, unit.Height, unit.PositionTimestamp = nil, nil, nil, nil
+		unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.PositionTimestamp = nil, nil, nil, nil, nil
 		return nil
 	}
 	p := *in.Position
 	if !validCoordinate(p.Latitude, 90) || !validCoordinate(p.Longitude, 180) ||
-		(p.Height != nil && !validCoordinate(*p.Height, math.MaxFloat64)) {
+		(p.Height != nil && !validCoordinate(*p.Height, math.MaxFloat64)) ||
+		(p.Accuracy != nil && (*p.Accuracy < 0 || !validCoordinate(*p.Accuracy, math.MaxFloat64))) {
 		return ErrInvalidPosition
 	}
 	ts := p.Timestamp.UTC()
-	unit.Latitude, unit.Longitude, unit.Height, unit.PositionTimestamp = &p.Latitude, &p.Longitude, p.Height, &ts
+	unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.PositionTimestamp = &p.Latitude, &p.Longitude, p.Height, p.Accuracy, &ts
 	return nil
 }
 

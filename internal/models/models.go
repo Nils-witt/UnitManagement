@@ -69,14 +69,17 @@ type Session struct {
 }
 
 // Unit is a tracked unit. Its last known position is optional: the Position
-// columns are either all set (Height may still be nil) or all nil.
+// columns are either all set (Height and Accuracy may still be nil) or all
+// nil.
 type Unit struct {
 	ID   uuid.UUID `gorm:"type:uuid;primaryKey"`
 	Name string    `gorm:"uniqueIndex;not null"`
 	// Latitude and Longitude are WGS 84 degrees, Height is meters.
+	// Accuracy is the horizontal accuracy radius in meters.
 	Latitude          *float64 `gorm:"type:double precision"`
 	Longitude         *float64 `gorm:"type:double precision"`
 	Height            *float64 `gorm:"type:double precision"`
+	Accuracy          *float64 `gorm:"type:double precision"`
 	PositionTimestamp *time.Time
 	// Symbol is nil when the unit has no tactical symbol.
 	Symbol *UnitSymbol `gorm:"serializer:json;type:jsonb"`
@@ -141,9 +144,11 @@ type UnitPosition struct {
 	UnitID uuid.UUID `gorm:"type:uuid;not null;index:idx_unit_positions_unit_timestamp,priority:1"`
 	Unit   *Unit     `gorm:"constraint:OnDelete:CASCADE"`
 	// Latitude and Longitude are WGS 84 degrees, Height is meters.
+	// Accuracy is the horizontal accuracy radius in meters.
 	Latitude  float64  `gorm:"type:double precision;not null"`
 	Longitude float64  `gorm:"type:double precision;not null"`
 	Height    *float64 `gorm:"type:double precision"`
+	Accuracy  *float64 `gorm:"type:double precision"`
 	// Timestamp is when the position was measured.
 	Timestamp time.Time `gorm:"not null;index:idx_unit_positions_unit_timestamp,priority:2,sort:desc"`
 	CreatedAt time.Time

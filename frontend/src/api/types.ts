@@ -103,6 +103,8 @@ export interface Position {
   lon: number;
   /** Meters; null when unknown. */
   height: number | null;
+  /** Horizontal accuracy radius in meters; null when unknown. */
+  accuracy: number | null;
   /** When the position was measured. */
   timestamp: string;
 }

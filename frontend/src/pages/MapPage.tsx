@@ -218,9 +218,14 @@ export default function MapPage() {
       setMovingId(null);
       setError(null);
       const { name, symbol, tacticalName } = movingUnit;
-      // The old height doesn't apply to the new place; the server stamps the
-      // position with the current time.
-      const position = { lat: e.lngLat.lat, lon: e.lngLat.wrap().lng, height: null };
+      // The old height and accuracy don't apply to the new place; the server
+      // stamps the position with the current time.
+      const position = {
+        lat: e.lngLat.lat,
+        lon: e.lngLat.wrap().lng,
+        height: null,
+        accuracy: null,
+      };
       api
         .updateUnit(movingUnit.id, { name, position, symbol, tacticalName })
         .then(reloadUnits)
@@ -628,13 +633,14 @@ function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: Position
 
 function TrackPointPopupContent({ entry }: { entry: PositionHistoryEntry }) {
   const { t, i18n } = useTranslation();
-  const { lat, lon, height, timestamp, recordedAt, recordedBy } = entry;
+  const { lat, lon, height, accuracy, timestamp, recordedAt, recordedBy } = entry;
   return (
     <>
       <strong>{fmtDate(timestamp, i18n.language)}</strong>
       <div>
         {lat.toFixed(5)}, {lon.toFixed(5)}
         {height !== null && ` · ${t('unitRow.height', { height })}`}
+        {accuracy !== null && ` · ${t('unitRow.accuracy', { accuracy })}`}
       </div>
       <div className="map-page__popup-time">
         {t('unitHistory.recorded')}: {fmtDate(recordedAt, i18n.language)}{' '}
@@ -712,7 +718,7 @@ function UnitMarker({
 function UnitPopupContent({ unit }: { unit: PlacedUnit }) {
   const { t, i18n } = useTranslation();
   const tacticalName = formatTacticalName(unit.tacticalName);
-  const { lat, lon, height, timestamp } = unit.position;
+  const { lat, lon, height, accuracy, timestamp } = unit.position;
   return (
     <>
       <strong>{unit.name}</strong>
@@ -720,6 +726,7 @@ function UnitPopupContent({ unit }: { unit: PlacedUnit }) {
       <div>
         {lat.toFixed(5)}, {lon.toFixed(5)}
         {height !== null && ` · ${t('unitRow.height', { height })}`}
+        {accuracy !== null && ` · ${t('unitRow.accuracy', { accuracy })}`}
       </div>
       <div className="map-page__popup-time">{fmtDate(timestamp, i18n.language)}</div>
     </>

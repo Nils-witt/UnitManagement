@@ -46,11 +46,16 @@ func TestUnitPatchRequest(t *testing.T) {
 		}},
 		{"position replaced", `{"position":{"lat":5,"lon":6}}`, func(t *testing.T, in units.Input) {
 			p := in.Position
-			if p == nil || p.Latitude != 5 || p.Longitude != 6 || p.Height != nil {
-				t.Errorf("got position %+v, want 5/6 without height", p)
+			if p == nil || p.Latitude != 5 || p.Longitude != 6 || p.Height != nil || p.Accuracy != nil {
+				t.Errorf("got position %+v, want 5/6 without height and accuracy", p)
 			}
 			if in.Symbol == nil {
 				t.Error("symbol cleared, want unchanged")
+			}
+		}},
+		{"position with accuracy", `{"position":{"lat":5,"lon":6,"accuracy":8.5}}`, func(t *testing.T, in units.Input) {
+			if p := in.Position; p == nil || p.Accuracy == nil || *p.Accuracy != 8.5 {
+				t.Errorf("got position %+v, want accuracy 8.5", p)
 			}
 		}},
 	}

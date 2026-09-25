@@ -13,8 +13,10 @@ type User struct {
 	PasswordHash string `gorm:"not null"`
 	IsAdmin      bool   `gorm:"not null;default:false"`
 	// OIDCIssuer and OIDCSubject link the account to an SSO identity; both
-	// are nil for local accounts. Together they identify the user at the
-	// provider for good, unlike the username or email claims. The column
+	// are nil for local accounts. Accounts are looked up by subject alone,
+	// which identifies the user at the provider for good, unlike the
+	// username or email claims; the issuer is the one the account was first
+	// seen from. The column
 	// names are explicit because GORM would otherwise derive o_id_c_issuer.
 	OIDCIssuer  *string `gorm:"column:oidc_issuer;uniqueIndex:idx_users_oidc_identity"`
 	OIDCSubject *string `gorm:"column:oidc_subject;uniqueIndex:idx_users_oidc_identity"`

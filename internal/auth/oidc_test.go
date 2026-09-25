@@ -123,6 +123,14 @@ const fakeNonce = "nonce"
 // userinfo is nil, a userinfo endpoint.
 func newFakeOP(t *testing.T, extraClaims, userinfo map[string]any) *httptest.Server {
 	t.Helper()
+	srv, _ := newSigningFakeOP(t, extraClaims, userinfo)
+	return srv
+}
+
+// newSigningFakeOP is newFakeOP that also returns a function signing
+// arbitrary claims with the provider's key, e.g. to mint access tokens.
+func newSigningFakeOP(t *testing.T, extraClaims, userinfo map[string]any) (*httptest.Server, func(claims map[string]any) string) {
+	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -155,12 +163,7 @@ func newFakeOP(t *testing.T, extraClaims, userinfo map[string]any) *httptest.Ser
 			"n": b64(key.N.Bytes()), "e": b64(big.NewInt(int64(key.E)).Bytes()),
 		}}})
 	})
-	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
-		claims := map[string]any{
-			"iss": srv.URL, "sub": "sub-1", "aud": "client", "nonce": fakeNonce,
-			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(),
-		}
-		maps.Copy(claims, extraClaims)
+	sign := func(claims map[string]any) string {
 		header, _ := json.Marshal(map[string]string{"alg": "RS256", "kid": "k1", "typ": "JWT"})
 		payload, _ := json.Marshal(claims)
 		signed := b64(header) + "." + b64(payload)
@@ -169,9 +172,17 @@ func newFakeOP(t *testing.T, extraClaims, userinfo map[string]any) *httptest.Ser
 		if err != nil {
 			t.Error(err)
 		}
+		return signed + "." + b64(sig)
+	}
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		claims := map[string]any{
+			"iss": srv.URL, "sub": "sub-1", "aud": "client", "nonce": fakeNonce,
+			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(),
+		}
+		maps.Copy(claims, extraClaims)
 		writeJSON(w, map[string]any{
 			"access_token": "access", "token_type": "Bearer", "expires_in": 60,
-			"id_token": signed + "." + b64(sig),
+			"id_token": sign(claims),
 		})
 	})
 	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, _ *http.Request) {
@@ -179,7 +190,7 @@ func newFakeOP(t *testing.T, extraClaims, userinfo map[string]any) *httptest.Ser
 		maps.Copy(info, userinfo)
 		writeJSON(w, info)
 	})
-	return srv
+	return srv, sign
 }
 
 func ptr[T any](v T) *T { return &v }

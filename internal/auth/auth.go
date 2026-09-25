@@ -51,6 +51,9 @@ type Service struct {
 	db         *gorm.DB
 	sessionTTL time.Duration
 	tokens     *tokenSigner
+	// accessTokens, if set, also accepts OIDC access tokens (see
+	// SetOIDCAccessTokens).
+	accessTokens *OIDCAccessTokens
 }
 
 // NewService signs access tokens with jwtSecret, which must be at least
@@ -229,8 +232,12 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 // user. A validly signed token only counts while its session exists, so
 // logout and password resets revoke it. This runs on every authenticated
 // request, so the user is fetched with a JOIN in one round trip instead of
-// Preload's second query.
+// Preload's second query. With SetOIDCAccessTokens, a trusted OIDC
+// provider's access token is accepted too (see userForAccessToken).
 func (s *Service) UserForToken(ctx context.Context, token string) (*models.User, error) {
+	if user, handled, err := s.userForAccessToken(ctx, token); handled {
+		return user, err
+	}
 	sessionID, userID, err := s.tokens.verify(token)
 	if err != nil {
 		return nil, err

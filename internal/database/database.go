@@ -57,6 +57,12 @@ func Connect(dsn string) (*gorm.DB, error) {
 	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Group{}, &models.UserGroup{}, &models.Unit{}, &models.UnitPosition{}); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
+	// SSO accounts are looked up by subject alone. Not unique: accounts
+	// provisioned while lookups were keyed by issuer and subject may share a
+	// subject, and a unique index would then fail to build.
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_users_oidc_subject ON users (oidc_subject) WHERE oidc_subject IS NOT NULL`).Error; err != nil {
+		return nil, fmt.Errorf("create oidc subject index: %w", err)
+	}
 	// Units positioned before the history existed start it with their current
 	// position. Afterwards every unit's position is in its history, so this
 	// finds nothing.

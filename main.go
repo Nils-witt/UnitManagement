@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -78,6 +79,16 @@ func run() error {
 			return err
 		}
 		slog.Info("sso enabled", "issuer", cfg.OIDC.IssuerURL)
+	}
+	if cfg.OIDCAccessTokensEnabled() {
+		discoverCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		accessTokens, err := auth.NewOIDCAccessTokens(discoverCtx, oidcProvider, cfg.OIDC)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("init oidc access tokens: %w", err)
+		}
+		authService.SetOIDCAccessTokens(accessTokens)
+		slog.Info("oidc access tokens accepted", "audiences", cfg.OIDC.AccessTokenAudiences, "extraIssuers", cfg.OIDC.AccessTokenIssuers)
 	}
 	go authService.CleanupExpiredSessions(ctx, time.Hour)
 

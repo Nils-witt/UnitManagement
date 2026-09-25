@@ -80,6 +80,9 @@ func Load() (*Config, error) {
 			ExtraScopes:  strings.Fields(strings.ReplaceAll(os.Getenv("OIDC_EXTRA_SCOPES"), ",", " ")),
 			AdminGroup:   strings.TrimSpace(os.Getenv("OIDC_ADMIN_GROUP")),
 			GroupsClaim:  getEnv("OIDC_GROUPS_CLAIM", "groups"),
+
+			AccessTokenAudiences: splitList(os.Getenv("OIDC_ACCESS_TOKEN_AUDIENCE")),
+			AccessTokenIssuers:   splitList(os.Getenv("OIDC_ACCESS_TOKEN_ISSUERS")),
 		},
 		OIDCDisplayName: getEnv("OIDC_DISPLAY_NAME", "SSO"),
 	}
@@ -104,11 +107,34 @@ func Load() (*Config, error) {
 		}
 	}
 
+	if len(o.AccessTokenAudiences) == 0 && len(o.AccessTokenIssuers) > 0 {
+		return nil, errors.New("OIDC_ACCESS_TOKEN_ISSUERS requires OIDC_ACCESS_TOKEN_AUDIENCE to be set")
+	}
+	if len(o.AccessTokenAudiences) > 0 && set == 0 && len(o.AccessTokenIssuers) == 0 {
+		return nil, errors.New("OIDC_ACCESS_TOKEN_AUDIENCE requires an issuer to trust: configure SSO (OIDC_ISSUER_URL, ...) or set OIDC_ACCESS_TOKEN_ISSUERS")
+	}
+
 	return cfg, nil
 }
 
 // OIDCEnabled reports whether SSO login is configured.
 func (c *Config) OIDCEnabled() bool { return c.OIDC.IssuerURL != "" }
+
+// OIDCAccessTokensEnabled reports whether OIDC access tokens are accepted
+// directly as API bearer tokens.
+func (c *Config) OIDCAccessTokensEnabled() bool { return len(c.OIDC.AccessTokenAudiences) > 0 }
+
+// splitList splits a comma-separated list, trimming whitespace around each
+// entry and skipping blank ones.
+func splitList(raw string) []string {
+	var values []string
+	for entry := range strings.SplitSeq(raw, ",") {
+		if entry = strings.TrimSpace(entry); entry != "" {
+			values = append(values, entry)
+		}
+	}
+	return values
+}
 
 // parsePrefixes parses a comma-separated list of IP addresses and CIDR
 // ranges; a bare address becomes a single-host prefix.

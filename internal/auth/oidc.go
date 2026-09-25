@@ -42,11 +42,23 @@ type OIDCConfig struct {
 	// GroupsClaim names the claim listing the user's groups, which are
 	// copied to the account on every sign-in.
 	GroupsClaim string
+
+	// AccessTokenAudiences, if non-empty, lets API clients present a JWT
+	// access token directly as their bearer token, provided its aud claim
+	// contains at least one of these values. Tokens are accepted from the
+	// login provider above (if configured) and from AccessTokenIssuers (see
+	// NewOIDCAccessTokens).
+	AccessTokenAudiences []string
+	// AccessTokenIssuers are additional issuers whose access tokens are
+	// trusted alongside the login provider's. They don't need login to be
+	// configured at all.
+	AccessTokenIssuers []string
 }
 
 // OIDCProvider runs the authorization code flow (with PKCE) against one
 // provider. A nil *OIDCProvider means SSO is not configured.
 type OIDCProvider struct {
+	issuer      string
 	provider    *oidc.Provider
 	verifier    *oidc.IDTokenVerifier
 	oauth2      oauth2.Config
@@ -62,6 +74,7 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 		return nil, fmt.Errorf("discover oidc provider %q: %w", cfg.IssuerURL, err)
 	}
 	return &OIDCProvider{
+		issuer:      cfg.IssuerURL,
 		provider:    provider,
 		adminGroup:  cfg.AdminGroup,
 		groupsClaim: cfg.GroupsClaim,
@@ -311,11 +324,21 @@ func ensureGroups(tx *gorm.DB, names []string) ([]models.Group, error) {
 	return groups, err
 }
 
+// userForOIDCIdentity returns the account linked to id's subject, creating
+// it on first sign-in. The issuer is deliberately not part of the key: every
+// trusted issuer (the login provider and any additional access-token
+// issuers) is assumed to share one subject namespace, so the same subject
+// arriving via different issuers is the same account. If more than one
+// account is linked to the subject — possible for accounts provisioned
+// while they were keyed by issuer and subject, or by concurrent first
+// sign-ins via different issuers — the oldest one wins, consistently. The
+// issuer is recorded as the one the account was first seen from.
 func (s *Service) userForOIDCIdentity(ctx context.Context, id OIDCIdentity) (*models.User, error) {
 	find := func() (*models.User, error) {
 		var user models.User
 		err := s.db.WithContext(ctx).
-			Where("oidc_issuer = ? AND oidc_subject = ?", id.Issuer, id.Subject).
+			Where("oidc_subject = ?", id.Subject).
+			Order("created_at, id").
 			First(&user).Error
 		if err != nil {
 			return nil, err

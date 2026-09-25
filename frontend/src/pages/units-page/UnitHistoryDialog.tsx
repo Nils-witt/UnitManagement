@@ -12,7 +12,7 @@ import type { Unit } from '../../api/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import Modal from '../../components/Modal';
 import { useUnitPositions } from '../../hooks/useUnitPositions';
-import { fmtDate } from '../../lib/format';
+import { fmtDate, fmtSpeed } from '../../lib/format';
 
 /** Mounted by the modal only while it is open, so it fetches fresh each time. */
 function HistoryTable({ unit }: { unit: Unit }) {
@@ -29,6 +29,8 @@ function HistoryTable({ unit }: { unit: Unit }) {
               <TableCell>{t('unitsListCard.position')}</TableCell>
               <TableCell>{t('unitHistory.height')}</TableCell>
               <TableCell>{t('unitHistory.accuracy')}</TableCell>
+              <TableCell>{t('unitHistory.speed')}</TableCell>
+              <TableCell>{t('unitHistory.course')}</TableCell>
               <TableCell>{t('unitHistory.recorded')}</TableCell>
             </TableRow>
           </TableHead>
@@ -46,6 +48,12 @@ function HistoryTable({ unit }: { unit: Unit }) {
                   {p.accuracy != null
                     ? t('unitRow.accuracy', { accuracy: p.accuracy.toFixed(1) })
                     : '–'}
+                </TableCell>
+                <TableCell>
+                  {p.speed != null ? t('unitRow.speed', { speed: fmtSpeed(p.speed) }) : '–'}
+                </TableCell>
+                <TableCell>
+                  {p.course != null ? t('unitRow.course', { course: p.course.toFixed(0) }) : '–'}
                 </TableCell>
                 <TableCell>
                   {fmtDate(p.recordedAt, i18n.language)}

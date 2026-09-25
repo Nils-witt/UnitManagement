@@ -5,6 +5,7 @@ import type { Unit, UnitInput } from '../../api/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import Modal from '../../components/Modal';
 import { errorMessage } from '../../lib/errors';
+import { KMH_PER_MS } from '../../lib/format';
 import { cleanTacticalName } from '../../lib/tacticalName';
 import { cleanSymbol } from '../../lib/unitSymbol';
 import TacticalNameFields from './TacticalNameFields';
@@ -42,6 +43,11 @@ function UnitForm({
   const [accuracy, setAccuracy] = useState(
     initial?.accuracy != null ? String(initial.accuracy) : '',
   );
+  // Speed is edited in km/h; an untouched field keeps the exact m/s value.
+  const initialSpeed =
+    initial?.speed != null ? String(Number((initial.speed * KMH_PER_MS).toFixed(1))) : '';
+  const [speed, setSpeed] = useState(initialSpeed);
+  const [course, setCourse] = useState(initial?.course != null ? String(initial.course) : '');
   const [symbol, setSymbol] = useState(unit?.symbol ?? {});
   const [tacticalName, setTacticalName] = useState(unit?.tacticalName ?? {});
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +64,28 @@ function UnitForm({
     hasPosition &&
     accuracyValue !== null &&
     !(Number.isFinite(accuracyValue) && accuracyValue >= 0);
+  const speedKmh = speed.trim() === '' ? null : parseDecimal(speed);
+  const speedInvalid =
+    hasPosition && speedKmh !== null && !(Number.isFinite(speedKmh) && speedKmh >= 0);
+  const speedValue =
+    speed === initialSpeed
+      ? (initial?.speed ?? null)
+      : speedKmh === null
+        ? null
+        : speedKmh / KMH_PER_MS;
+  const courseValue = course.trim() === '' ? null : parseDecimal(course);
+  const courseInvalid =
+    hasPosition &&
+    courseValue !== null &&
+    !(Number.isFinite(courseValue) && courseValue >= 0 && courseValue < 360);
   const positionIncomplete =
     hasPosition &&
-    (!inRange(latValue, 90) || !inRange(lonValue, 180) || heightInvalid || accuracyInvalid);
+    (!inRange(latValue, 90) ||
+      !inRange(lonValue, 180) ||
+      heightInvalid ||
+      accuracyInvalid ||
+      speedInvalid ||
+      courseInvalid);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -68,7 +93,14 @@ function UnitForm({
     setSubmitting(true);
     let position: UnitInput['position'] = null;
     if (hasPosition) {
-      position = { lat: latValue, lon: lonValue, height: heightValue, accuracy: accuracyValue };
+      position = {
+        lat: latValue,
+        lon: lonValue,
+        height: heightValue,
+        accuracy: accuracyValue,
+        speed: speedValue,
+        course: courseValue,
+      };
       // An unchanged position keeps when it was measured; a new one is
       // stamped with the current time by the server.
       if (
@@ -76,7 +108,9 @@ function UnitForm({
         initial.lat === latValue &&
         initial.lon === lonValue &&
         initial.height === heightValue &&
-        initial.accuracy === accuracyValue
+        initial.accuracy === accuracyValue &&
+        initial.speed === speedValue &&
+        initial.course === courseValue
       ) {
         position.timestamp = initial.timestamp;
       }
@@ -159,6 +193,24 @@ function UnitForm({
             helperText={t('unitDialog.accuracyHint')}
             value={accuracy}
             onChange={(e) => setAccuracy(e.target.value)}
+          />
+          <TextField
+            label={t('unitDialog.speedLabel')}
+            size="small"
+            slotProps={{ htmlInput: { inputMode: 'decimal' } }}
+            error={speedInvalid}
+            helperText={t('unitDialog.speedHint')}
+            value={speed}
+            onChange={(e) => setSpeed(e.target.value)}
+          />
+          <TextField
+            label={t('unitDialog.courseLabel')}
+            size="small"
+            slotProps={{ htmlInput: { inputMode: 'decimal' } }}
+            error={courseInvalid}
+            helperText={t('unitDialog.courseHint')}
+            value={course}
+            onChange={(e) => setCourse(e.target.value)}
           />
         </Stack>
       )}

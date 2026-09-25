@@ -29,7 +29,7 @@ var (
 	ErrUnitNotFound        = errors.New("unit not found")
 	ErrNameTaken           = errors.New("unit name is already taken")
 	ErrInvalidName         = fmt.Errorf("unit name must be 1 to %d characters", MaxNameLength)
-	ErrInvalidPosition     = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, height finite, and accuracy finite and not negative")
+	ErrInvalidPosition     = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, height finite, accuracy and speed finite and not negative, and course at least 0 and below 360")
 	ErrInvalidSymbol       = errors.New("symbol components must be IDs of lowercase letters, digits and dashes")
 	ErrInvalidTacticalName = fmt.Errorf("tactical name parts must be at most %d characters without control characters", MaxTacticalNamePartLength)
 )
@@ -45,7 +45,11 @@ type Position struct {
 	// Height is nil when unknown.
 	Height *float64
 	// Accuracy is the horizontal accuracy radius in meters, nil when unknown.
-	Accuracy  *float64
+	Accuracy *float64
+	// Speed is meters per second, nil when unknown.
+	Speed *float64
+	// Course is degrees clockwise from true north, nil when unknown.
+	Course    *float64
 	Timestamp time.Time
 }
 
@@ -224,6 +228,8 @@ func recordPosition(tx *gorm.DB, unit *models.Unit, by *models.User) error {
 		Longitude:    *unit.Longitude,
 		Height:       unit.Height,
 		Accuracy:     unit.Accuracy,
+		Speed:        unit.Speed,
+		Course:       unit.Course,
 		Timestamp:    *unit.PositionTimestamp,
 		RecordedByID: &by.ID,
 	}
@@ -243,7 +249,9 @@ func samePosition(a, b *models.Unit) bool {
 		return true
 	}
 	return *a.Latitude == *b.Latitude && *a.Longitude == *b.Longitude &&
-		equalPtr(a.Height, b.Height) && equalPtr(a.Accuracy, b.Accuracy) && a.PositionTimestamp.Equal(*b.PositionTimestamp)
+		equalPtr(a.Height, b.Height) && equalPtr(a.Accuracy, b.Accuracy) &&
+		equalPtr(a.Speed, b.Speed) && equalPtr(a.Course, b.Course) &&
+		a.PositionTimestamp.Equal(*b.PositionTimestamp)
 }
 
 func equalPtr[T comparable](a, b *T) bool {
@@ -263,6 +271,8 @@ func inputOf(unit *models.Unit) Input {
 			Longitude: *unit.Longitude,
 			Height:    unit.Height,
 			Accuracy:  unit.Accuracy,
+			Speed:     unit.Speed,
+			Course:    unit.Course,
 			Timestamp: *unit.PositionTimestamp,
 		}
 	}
@@ -290,17 +300,19 @@ func apply(unit *models.Unit, in Input) error {
 	unit.TacticalName = tacticalName
 
 	if in.Position == nil {
-		unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.PositionTimestamp = nil, nil, nil, nil, nil
+		unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.Speed, unit.Course, unit.PositionTimestamp = nil, nil, nil, nil, nil, nil, nil
 		return nil
 	}
 	p := *in.Position
 	if !validCoordinate(p.Latitude, 90) || !validCoordinate(p.Longitude, 180) ||
 		(p.Height != nil && !validCoordinate(*p.Height, math.MaxFloat64)) ||
-		(p.Accuracy != nil && (*p.Accuracy < 0 || !validCoordinate(*p.Accuracy, math.MaxFloat64))) {
+		!validNonNegative(p.Accuracy) || !validNonNegative(p.Speed) ||
+		(p.Course != nil && !(*p.Course >= 0 && *p.Course < 360)) {
 		return ErrInvalidPosition
 	}
 	ts := p.Timestamp.UTC()
-	unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.PositionTimestamp = &p.Latitude, &p.Longitude, p.Height, p.Accuracy, &ts
+	unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.Speed, unit.Course, unit.PositionTimestamp =
+		&p.Latitude, &p.Longitude, p.Height, p.Accuracy, p.Speed, p.Course, &ts
 	return nil
 }
 
@@ -354,6 +366,12 @@ func normalizeTacticalName(n *models.TacticalName) (*models.TacticalName, error)
 
 func validCoordinate(v, limit float64) bool {
 	return !math.IsNaN(v) && v >= -limit && v <= limit
+}
+
+// validNonNegative reports whether v is unknown (nil) or finite and not
+// negative.
+func validNonNegative(v *float64) bool {
+	return v == nil || (*v >= 0 && *v <= math.MaxFloat64)
 }
 
 func mapWriteError(err error, op string) error {

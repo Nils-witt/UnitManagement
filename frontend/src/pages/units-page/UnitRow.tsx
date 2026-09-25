@@ -2,7 +2,7 @@ import { Button, Stack, TableCell, TableRow, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Unit } from '../../api/types';
 import UnitSymbolIcon from '../../components/UnitSymbolIcon';
-import { fmtDate } from '../../lib/format';
+import { fmtDate, fmtSpeed } from '../../lib/format';
 import { formatTacticalName } from '../../lib/tacticalName';
 import './UnitRow.scss';
 
@@ -42,6 +42,8 @@ export default function UnitRow({
             {p.height != null && ` · ${t('unitRow.height', { height: p.height.toFixed(1) })}`}
             {p.accuracy != null &&
               ` · ${t('unitRow.accuracy', { accuracy: p.accuracy.toFixed(1) })}`}
+            {p.speed != null && ` · ${t('unitRow.speed', { speed: fmtSpeed(p.speed) })}`}
+            {p.course != null && ` · ${t('unitRow.course', { course: p.course.toFixed(0) })}`}
             <Typography variant="caption" color="text.secondary" component="div">
               {fmtDate(p.timestamp, i18n.language)}
             </Typography>

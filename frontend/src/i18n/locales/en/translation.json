@@ -150,6 +150,10 @@
     "heightHint": "Meters, optional",
     "accuracyLabel": "Accuracy",
     "accuracyHint": "Meters, optional",
+    "speedLabel": "Speed",
+    "speedHint": "km/h, optional",
+    "courseLabel": "Course",
+    "courseHint": "Degrees from north, optional",
     "editTitle": "Edit {{name}}",
     "newTitle": "New unit"
   },
@@ -157,6 +161,8 @@
     "noPosition": "No position",
     "height": "{{height}} m",
     "accuracy": "±{{accuracy}} m",
+    "speed": "{{speed}} km/h",
+    "course": "{{course}}°",
     "by": "by {{name}}",
     "deletedUser": "deleted user",
     "editAria": "Edit {{name}}",
@@ -169,6 +175,8 @@
     "measured": "Measured",
     "height": "Height",
     "accuracy": "Accuracy",
+    "speed": "Speed",
+    "course": "Course",
     "recorded": "Recorded",
     "empty": "No positions recorded yet"
   },

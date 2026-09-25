@@ -1003,6 +1003,17 @@ components:
           format: double
           minimum: 0
           description: Horizontal accuracy radius in meters; null when unknown.
+        speed:
+          type: [number, "null"]
+          format: double
+          minimum: 0
+          description: Speed over ground in meters per second; null when unknown.
+        course:
+          type: [number, "null"]
+          format: double
+          minimum: 0
+          exclusiveMaximum: 360
+          description: Course over ground in degrees clockwise from true north; null when unknown.
         timestamp:
           type: [string, "null"]
           format: date-time

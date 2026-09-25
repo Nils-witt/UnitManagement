@@ -27,7 +27,7 @@ import { useApi } from '../hooks/useApi';
 import { useUnitPositions } from '../hooks/useUnitPositions';
 import { useUnits } from '../hooks/useUnits';
 import { errorMessage } from '../lib/errors';
-import { fmtDate } from '../lib/format';
+import { fmtDate, fmtSpeed } from '../lib/format';
 import { formatTacticalName } from '../lib/tacticalName';
 import { symbolDataUrl } from '../lib/unitSymbol';
 import './MapPage.scss';
@@ -218,13 +218,15 @@ export default function MapPage() {
       setMovingId(null);
       setError(null);
       const { name, symbol, tacticalName } = movingUnit;
-      // The old height and accuracy don't apply to the new place; the server
-      // stamps the position with the current time.
+      // The old height, accuracy and motion don't apply to the new place; the
+      // server stamps the position with the current time.
       const position = {
         lat: e.lngLat.lat,
         lon: e.lngLat.wrap().lng,
         height: null,
         accuracy: null,
+        speed: null,
+        course: null,
       };
       api
         .updateUnit(movingUnit.id, { name, position, symbol, tacticalName })
@@ -633,7 +635,7 @@ function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: Position
 
 function TrackPointPopupContent({ entry }: { entry: PositionHistoryEntry }) {
   const { t, i18n } = useTranslation();
-  const { lat, lon, height, accuracy, timestamp, recordedAt, recordedBy } = entry;
+  const { lat, lon, height, accuracy, speed, course, timestamp, recordedAt, recordedBy } = entry;
   return (
     <>
       <strong>{fmtDate(timestamp, i18n.language)}</strong>
@@ -641,6 +643,8 @@ function TrackPointPopupContent({ entry }: { entry: PositionHistoryEntry }) {
         {lat.toFixed(5)}, {lon.toFixed(5)}
         {height !== null && ` · ${t('unitRow.height', { height })}`}
         {accuracy !== null && ` · ${t('unitRow.accuracy', { accuracy })}`}
+        {speed !== null && ` · ${t('unitRow.speed', { speed: fmtSpeed(speed) })}`}
+        {course !== null && ` · ${t('unitRow.course', { course: course.toFixed(0) })}`}
       </div>
       <div className="map-page__popup-time">
         {t('unitHistory.recorded')}: {fmtDate(recordedAt, i18n.language)}{' '}
@@ -718,7 +722,7 @@ function UnitMarker({
 function UnitPopupContent({ unit }: { unit: PlacedUnit }) {
   const { t, i18n } = useTranslation();
   const tacticalName = formatTacticalName(unit.tacticalName);
-  const { lat, lon, height, accuracy, timestamp } = unit.position;
+  const { lat, lon, height, accuracy, speed, course, timestamp } = unit.position;
   return (
     <>
       <strong>{unit.name}</strong>
@@ -727,6 +731,8 @@ function UnitPopupContent({ unit }: { unit: PlacedUnit }) {
         {lat.toFixed(5)}, {lon.toFixed(5)}
         {height !== null && ` · ${t('unitRow.height', { height })}`}
         {accuracy !== null && ` · ${t('unitRow.accuracy', { accuracy })}`}
+        {speed !== null && ` · ${t('unitRow.speed', { speed: fmtSpeed(speed) })}`}
+        {course !== null && ` · ${t('unitRow.course', { course: course.toFixed(0) })}`}
       </div>
       <div className="map-page__popup-time">{fmtDate(timestamp, i18n.language)}</div>
     </>

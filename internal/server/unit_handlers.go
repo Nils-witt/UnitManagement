@@ -24,6 +24,10 @@ type positionJSON struct {
 	// Accuracy is the horizontal accuracy radius in meters, null when
 	// unknown.
 	Accuracy *float64 `json:"accuracy"`
+	// Speed is meters per second, null when unknown.
+	Speed *float64 `json:"speed"`
+	// Course is degrees clockwise from true north, null when unknown.
+	Course *float64 `json:"course"`
 	// Timestamp is when the position was measured; requests may omit it to
 	// mean "now".
 	Timestamp *time.Time `json:"timestamp"`
@@ -85,6 +89,8 @@ func toUnitResponse(u *models.Unit) unitResponse {
 			Lon:       *u.Longitude,
 			Height:    u.Height,
 			Accuracy:  u.Accuracy,
+			Speed:     u.Speed,
+			Course:    u.Course,
 			Timestamp: u.PositionTimestamp,
 		}
 	}
@@ -101,9 +107,12 @@ type positionHistoryEntry struct {
 func toPositionHistoryEntry(p *models.UnitPosition) positionHistoryEntry {
 	ts := p.Timestamp
 	return positionHistoryEntry{
-		positionJSON: positionJSON{Lat: p.Latitude, Lon: p.Longitude, Height: p.Height, Accuracy: p.Accuracy, Timestamp: &ts},
-		RecordedAt:   p.CreatedAt,
-		RecordedBy:   toUserRef(p.RecordedBy),
+		positionJSON: positionJSON{
+			Lat: p.Latitude, Lon: p.Longitude, Height: p.Height, Accuracy: p.Accuracy,
+			Speed: p.Speed, Course: p.Course, Timestamp: &ts,
+		},
+		RecordedAt: p.CreatedAt,
+		RecordedBy: toUserRef(p.RecordedBy),
 	}
 }
 
@@ -121,7 +130,10 @@ func (req *unitRequest) input() units.Input {
 		if p.Timestamp != nil {
 			ts = *p.Timestamp
 		}
-		in.Position = &units.Position{Latitude: p.Lat, Longitude: p.Lon, Height: p.Height, Accuracy: p.Accuracy, Timestamp: ts}
+		in.Position = &units.Position{
+			Latitude: p.Lat, Longitude: p.Lon, Height: p.Height, Accuracy: p.Accuracy,
+			Speed: p.Speed, Course: p.Course, Timestamp: ts,
+		}
 	}
 	return in
 }

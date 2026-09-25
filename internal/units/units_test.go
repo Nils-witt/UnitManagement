@@ -88,6 +88,10 @@ func TestSamePosition(t *testing.T) {
 		u.Accuracy = accuracy
 		return u
 	}
+	withMotion := func(u *models.Unit, speed, course *float64) *models.Unit {
+		u.Speed, u.Course = speed, course
+		return u
+	}
 
 	tests := []struct {
 		name string
@@ -103,6 +107,9 @@ func TestSamePosition(t *testing.T) {
 		{name: "remeasured", a: at(1, 2, nil, ts), b: at(1, 2, nil, ts.Add(time.Second)), want: false},
 		{name: "accuracy changed", a: withAccuracy(at(1, 2, nil, ts), f(5)), b: withAccuracy(at(1, 2, nil, ts), f(10)), want: false},
 		{name: "accuracy equal", a: withAccuracy(at(1, 2, nil, ts), f(5)), b: withAccuracy(at(1, 2, nil, ts), f(5)), want: true},
+		{name: "speed changed", a: withMotion(at(1, 2, nil, ts), f(5), nil), b: withMotion(at(1, 2, nil, ts), f(6), nil), want: false},
+		{name: "course added", a: withMotion(at(1, 2, nil, ts), nil, nil), b: withMotion(at(1, 2, nil, ts), nil, f(90)), want: false},
+		{name: "motion equal", a: withMotion(at(1, 2, nil, ts), f(5), f(90)), b: withMotion(at(1, 2, nil, ts), f(5), f(90)), want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -115,10 +122,11 @@ func TestSamePosition(t *testing.T) {
 }
 
 func TestInputOfRoundTrips(t *testing.T) {
-	lat, lon, height, accuracy := 1.0, 2.0, 3.0, 4.0
+	lat, lon, height, accuracy, speed, course := 1.0, 2.0, 3.0, 4.0, 5.0, 6.0
 	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	unit := models.Unit{
-		Name: "Alpha", Latitude: &lat, Longitude: &lon, Height: &height, Accuracy: &accuracy, PositionTimestamp: &ts,
+		Name: "Alpha", Latitude: &lat, Longitude: &lon, Height: &height, Accuracy: &accuracy,
+		Speed: &speed, Course: &course, PositionTimestamp: &ts,
 		Symbol: &models.UnitSymbol{Grundzeichen: "fahrzeug"},
 	}
 	var got models.Unit
@@ -161,6 +169,43 @@ func TestApplyValidatesAccuracy(t *testing.T) {
 			}
 			if err == nil && !equalPtr(unit.Accuracy, tt.accuracy) {
 				t.Errorf("accuracy = %v, want %v", unit.Accuracy, tt.accuracy)
+			}
+		})
+	}
+}
+
+func TestApplyValidatesMotion(t *testing.T) {
+	t.Parallel()
+
+	f := func(v float64) *float64 { return &v }
+	tests := []struct {
+		name          string
+		speed, course *float64
+		wantErr       error
+	}{
+		{name: "unknown"},
+		{name: "stationary", speed: f(0), course: f(0)},
+		{name: "moving", speed: f(13.9), course: f(359.9)},
+		{name: "negative speed", speed: f(-1), wantErr: ErrInvalidPosition},
+		{name: "infinite speed", speed: f(math.Inf(1)), wantErr: ErrInvalidPosition},
+		{name: "nan speed", speed: f(math.NaN()), wantErr: ErrInvalidPosition},
+		{name: "negative course", course: f(-1), wantErr: ErrInvalidPosition},
+		{name: "full circle course", course: f(360), wantErr: ErrInvalidPosition},
+		{name: "nan course", course: f(math.NaN()), wantErr: ErrInvalidPosition},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var unit models.Unit
+			in := Input{Name: "Alpha", Position: &Position{
+				Latitude: 1, Longitude: 2, Speed: tt.speed, Course: tt.course, Timestamp: time.Now(),
+			}}
+			err := apply(&unit, in)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+			if err == nil && (!equalPtr(unit.Speed, tt.speed) || !equalPtr(unit.Course, tt.course)) {
+				t.Errorf("speed, course = %v, %v, want %v, %v", unit.Speed, unit.Course, tt.speed, tt.course)
 			}
 		})
 	}

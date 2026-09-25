@@ -105,6 +105,10 @@ export interface Position {
   height: number | null;
   /** Horizontal accuracy radius in meters; null when unknown. */
   accuracy: number | null;
+  /** Speed over ground in meters per second; null when unknown. */
+  speed: number | null;
+  /** Course over ground in degrees clockwise from true north; null when unknown. */
+  course: number | null;
   /** When the position was measured. */
   timestamp: string;
 }

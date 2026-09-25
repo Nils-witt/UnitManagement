@@ -46,8 +46,9 @@ func TestUnitPatchRequest(t *testing.T) {
 		}},
 		{"position replaced", `{"position":{"lat":5,"lon":6}}`, func(t *testing.T, in units.Input) {
 			p := in.Position
-			if p == nil || p.Latitude != 5 || p.Longitude != 6 || p.Height != nil || p.Accuracy != nil {
-				t.Errorf("got position %+v, want 5/6 without height and accuracy", p)
+			if p == nil || p.Latitude != 5 || p.Longitude != 6 || p.Height != nil || p.Accuracy != nil ||
+				p.Speed != nil || p.Course != nil {
+				t.Errorf("got position %+v, want 5/6 without height, accuracy, speed and course", p)
 			}
 			if in.Symbol == nil {
 				t.Error("symbol cleared, want unchanged")
@@ -56,6 +57,12 @@ func TestUnitPatchRequest(t *testing.T) {
 		{"position with accuracy", `{"position":{"lat":5,"lon":6,"accuracy":8.5}}`, func(t *testing.T, in units.Input) {
 			if p := in.Position; p == nil || p.Accuracy == nil || *p.Accuracy != 8.5 {
 				t.Errorf("got position %+v, want accuracy 8.5", p)
+			}
+		}},
+		{"position with speed and course", `{"position":{"lat":5,"lon":6,"speed":12.5,"course":270}}`, func(t *testing.T, in units.Input) {
+			p := in.Position
+			if p == nil || p.Speed == nil || *p.Speed != 12.5 || p.Course == nil || *p.Course != 270 {
+				t.Errorf("got position %+v, want speed 12.5 and course 270", p)
 			}
 		}},
 	}

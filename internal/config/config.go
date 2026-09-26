@@ -35,6 +35,10 @@ type Config struct {
 	AdminUsername string
 	AdminPassword string
 
+	// AuditLogRetention is how long audit log entries are kept; zero keeps
+	// them forever.
+	AuditLogRetention time.Duration
+
 	// OIDC enables SSO login when set (see OIDCEnabled).
 	OIDC auth.OIDCConfig
 	// OIDCDisplayName labels the SSO button on the login page.
@@ -57,21 +61,27 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("JWT_SECRET must be at least %d bytes long", auth.MinJWTSecretLength)
 	}
 
+	retention, err := time.ParseDuration(getEnv("AUDIT_LOG_RETENTION", "0"))
+	if err != nil || retention < 0 {
+		return nil, fmt.Errorf("invalid AUDIT_LOG_RETENTION: must be a non-negative duration such as 2160h")
+	}
+
 	proxies, err := parsePrefixes(os.Getenv("TRUSTED_PROXIES"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
 	}
 
 	cfg := &Config{
-		Addr:           getEnv("ADDR", ":8080"),
-		DatabaseURL:    getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
-		SessionTTL:     ttl,
-		JWTSecret:      jwtSecret,
-		CookieSecure:   secure,
-		InstanceName:   strings.TrimSpace(os.Getenv("INSTANCE_NAME")),
-		TrustedProxies: proxies,
-		AdminUsername:  getEnv("ADMIN_USERNAME", "admin"),
-		AdminPassword:  os.Getenv("ADMIN_PASSWORD"),
+		Addr:              getEnv("ADDR", ":8080"),
+		DatabaseURL:       getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
+		SessionTTL:        ttl,
+		JWTSecret:         jwtSecret,
+		CookieSecure:      secure,
+		InstanceName:      strings.TrimSpace(os.Getenv("INSTANCE_NAME")),
+		TrustedProxies:    proxies,
+		AuditLogRetention: retention,
+		AdminUsername:     getEnv("ADMIN_USERNAME", "admin"),
+		AdminPassword:     os.Getenv("ADMIN_PASSWORD"),
 		OIDC: auth.OIDCConfig{
 			IssuerURL:    os.Getenv("OIDC_ISSUER_URL"),
 			ClientID:     os.Getenv("OIDC_CLIENT_ID"),

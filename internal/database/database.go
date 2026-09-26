@@ -54,7 +54,7 @@ func Connect(dsn string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("set up user_groups join table: %w", err)
 	}
-	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Group{}, &models.UserGroup{}, &models.Unit{}, &models.UnitPosition{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Group{}, &models.UserGroup{}, &models.Unit{}, &models.UnitPosition{}, &models.AuditLog{}); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
 	// SSO accounts are looked up by subject alone. Not unique: accounts

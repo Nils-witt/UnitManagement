@@ -1,0 +1,17 @@
+.audit-log-page__filter {
+  min-width: 220px;
+}
+
+.audit-log-page__notice {
+  flex: 1;
+}
+
+.audit-log-page__more {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.audit-log-row__nowrap {
+  white-space: nowrap;
+}

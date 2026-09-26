@@ -8,6 +8,8 @@
 import { getToken } from './tokenStore';
 import type {
   ApiToken,
+  AuditLogEntry,
+  AuditLogQuery,
   AuthMethods,
   CreateTokenInput,
   CreateUserInput,
@@ -174,6 +176,18 @@ export class ApiClient {
 
   listGroups(): Promise<Group[]> {
     return this.getJson('/api/groups');
+  }
+
+  // ---- audit log (administrators only) -------------------------------------
+
+  /** Audit log entries, newest first. */
+  listAuditLog(query: AuditLogQuery = {}): Promise<AuditLogEntry[]> {
+    const params = new URLSearchParams();
+    if (query.action) params.set('action', query.action);
+    if (query.before) params.set('before', String(query.before));
+    if (query.limit) params.set('limit', String(query.limit));
+    const qs = params.size > 0 ? `?${params}` : '';
+    return this.getJson(`/api/audit-log${qs}`);
   }
 
   // ---- units ---------------------------------------------------------------

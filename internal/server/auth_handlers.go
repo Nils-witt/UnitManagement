@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/models"
 )
@@ -90,6 +91,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	token, user, expires, err := s.auth.Login(r.Context(), req.Username, req.Password)
 	if errors.Is(err, auth.ErrInvalidCredentials) {
+		s.record(r, audit.Entry{Action: audit.ActionLoginFailed, ActorName: truncate(req.Username, auth.MaxUsernameLength), Details: map[string]any{"method": "password"}})
 		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
@@ -98,6 +100,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	s.record(r, audit.Entry{Action: audit.ActionLogin, Actor: user, Details: map[string]any{"method": "password"}})
 
 	writeJSON(w, http.StatusOK, tokenResponse{
 		Token:     token,
@@ -111,8 +114,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 // always succeeds: the client discards the token either way.
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if token := auth.TokenFromRequest(r); token != "" {
+		// Looked up first, as the session is gone afterwards; an invalid
+		// token has nothing to log out of and nothing to record.
+		user, userErr := s.auth.UserForToken(r.Context(), token)
 		if err := s.auth.Logout(r.Context(), token); err != nil {
 			slog.Error("logout", "err", err)
+		} else if userErr == nil {
+			s.record(r, audit.Entry{Action: audit.ActionLogout, Actor: user})
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-unit-mangement/internal/models"
 )
@@ -176,17 +177,18 @@ func (s *Service) ListTokens(ctx context.Context, userID uint) ([]models.Session
 	return tokens, nil
 }
 
-// RevokeToken ends the user's API token with tokenID. Sign-in sessions
-// can't be revoked this way.
-func (s *Service) RevokeToken(ctx context.Context, userID, tokenID uint) error {
-	res := s.db.WithContext(ctx).Where("user_id = ? AND api_token", userID).Delete(&models.Session{}, tokenID)
+// RevokeToken ends the user's API token with tokenID and returns it as it
+// was. Sign-in sessions can't be revoked this way.
+func (s *Service) RevokeToken(ctx context.Context, userID, tokenID uint) (*models.Session, error) {
+	var token models.Session
+	res := s.db.WithContext(ctx).Clauses(clause.Returning{}).Where("user_id = ? AND api_token", userID).Delete(&token, tokenID)
 	if res.Error != nil {
-		return fmt.Errorf("revoke token %d: %w", tokenID, res.Error)
+		return nil, fmt.Errorf("revoke token %d: %w", tokenID, res.Error)
 	}
 	if res.RowsAffected == 0 {
-		return ErrTokenNotFound
+		return nil, ErrTokenNotFound
 	}
-	return nil
+	return &token, nil
 }
 
 // newSession is a stored session together with its access token.

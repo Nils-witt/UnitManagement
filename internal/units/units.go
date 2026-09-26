@@ -120,14 +120,17 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 	return unit, nil
 }
 
-func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models.User) (*models.Unit, error) {
+// Update replaces the unit's editable fields with in. It also returns which
+// of them changed (see Changed).
+func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models.User) (*models.Unit, []Field, error) {
 	return s.Patch(ctx, id, func(cur *Input) { *cur = in }, by)
 }
 
 // Patch updates the unit like Update, with the input patch makes of the
 // unit's current fields. It runs under the row lock, so concurrent patches of
 // different fields don't overwrite each other.
-func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), by *models.User) (*models.Unit, error) {
+func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), by *models.User) (*models.Unit, []Field, error) {
+	var changed []Field
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Lock the row so concurrent updates can't both miss a position change.
 		var unit models.Unit
@@ -144,6 +147,7 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 		if err := apply(&unit, in); err != nil {
 			return err
 		}
+		changed = Changed(&before, &unit)
 		unit.UpdatedByID = &by.ID
 		// Select("*") so a cleared position is written as NULLs too.
 		res := tx.Model(&unit).
@@ -161,26 +165,56 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 		return recordPosition(tx, &unit, by)
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	updated, err := s.Get(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.events.Publish(Event{Type: EventUpdated, ID: id, Unit: updated})
-	return updated, nil
+	return updated, changed, nil
 }
 
-func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	res := s.db.WithContext(ctx).Delete(&models.Unit{}, "id = ?", id)
+// Delete removes the unit and returns it as it was.
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.Unit, error) {
+	var unit models.Unit
+	res := s.db.WithContext(ctx).Clauses(clause.Returning{}).Where("id = ?", id).Delete(&unit)
 	if res.Error != nil {
-		return fmt.Errorf("delete unit %s: %w", id, res.Error)
+		return nil, fmt.Errorf("delete unit %s: %w", id, res.Error)
 	}
 	if res.RowsAffected == 0 {
-		return ErrUnitNotFound
+		return nil, ErrUnitNotFound
 	}
 	s.events.Publish(Event{Type: EventDeleted, ID: id})
-	return nil
+	return &unit, nil
+}
+
+// Field names an editable field of a unit.
+type Field string
+
+const (
+	FieldName         Field = "name"
+	FieldPosition     Field = "position"
+	FieldSymbol       Field = "symbol"
+	FieldTacticalName Field = "tacticalName"
+)
+
+// Changed returns the editable fields that differ between a and b.
+func Changed(a, b *models.Unit) []Field {
+	var changed []Field
+	if a.Name != b.Name {
+		changed = append(changed, FieldName)
+	}
+	if !samePosition(a, b) {
+		changed = append(changed, FieldPosition)
+	}
+	if !equalPtr(a.Symbol, b.Symbol) {
+		changed = append(changed, FieldSymbol)
+	}
+	if !equalPtr(a.TacticalName, b.TacticalName) {
+		changed = append(changed, FieldTacticalName)
+	}
+	return changed
 }
 
 // History returns up to limit entries of the unit's position history, newest

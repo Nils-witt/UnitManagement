@@ -3,6 +3,7 @@ package units
 import (
 	"errors"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -206,6 +207,44 @@ func TestApplyValidatesMotion(t *testing.T) {
 			}
 			if err == nil && (!equalPtr(unit.Speed, tt.speed) || !equalPtr(unit.Course, tt.course)) {
 				t.Errorf("speed, course = %v, %v, want %v, %v", unit.Speed, unit.Course, tt.speed, tt.course)
+			}
+		})
+	}
+}
+
+func TestChanged(t *testing.T) {
+	lat, lon, other := 1.0, 2.0, 3.0
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	base := func() models.Unit {
+		return models.Unit{
+			Name: "Alpha", Latitude: &lat, Longitude: &lon, PositionTimestamp: &ts,
+			Symbol: &models.UnitSymbol{Grundzeichen: "fahrzeug"}, TacticalName: &models.TacticalName{Number: "1"},
+		}
+	}
+	tests := []struct {
+		name   string
+		change func(u *models.Unit)
+		want   []Field
+	}{
+		{"nothing", func(u *models.Unit) {}, nil},
+		{"equal copies", func(u *models.Unit) {
+			u.Symbol = &models.UnitSymbol{Grundzeichen: "fahrzeug"}
+			u.Latitude = &[]float64{lat}[0]
+		}, nil},
+		{"name", func(u *models.Unit) { u.Name = "Bravo" }, []Field{FieldName}},
+		{"position", func(u *models.Unit) { u.Latitude = &other }, []Field{FieldPosition}},
+		{"position cleared", func(u *models.Unit) { u.Latitude, u.Longitude, u.PositionTimestamp = nil, nil, nil }, []Field{FieldPosition}},
+		{"symbol and tactical name", func(u *models.Unit) {
+			u.Symbol = nil
+			u.TacticalName = &models.TacticalName{Number: "2"}
+		}, []Field{FieldSymbol, FieldTacticalName}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, b := base(), base()
+			tt.change(&b)
+			if got := Changed(&a, &b); !slices.Equal(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
 	}

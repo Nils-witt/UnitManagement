@@ -21,7 +21,8 @@
     "users": "Benutzer",
     "units": "Einheiten",
     "map": "Karte",
-    "groups": "Gruppen"
+    "groups": "Gruppen",
+    "auditLog": "Protokoll"
   },
   "auth": {
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
@@ -228,5 +229,55 @@
     "rangeFrom": "Von",
     "rangeTo": "Bis",
     "rangeInvalid": "Darf nicht vor Von liegen"
+  },
+  "auditLog": {
+    "actionFilter": "Aktion",
+    "allActions": "Alle Aktionen",
+    "positionNotice": "Positionsänderungen stehen nicht hier, sondern im Positionsverlauf der Einheit.",
+    "refresh": "Aktualisieren",
+    "loadMore": "Ältere Einträge laden",
+    "empty": "Keine Einträge gefunden",
+    "time": "Zeitpunkt",
+    "user": "Benutzer",
+    "action": "Aktion",
+    "target": "Objekt",
+    "detailsColumn": "Details",
+    "address": "IP-Adresse",
+    "deletedUser": "gelöscht",
+    "actions": {
+      "auth.login": "Angemeldet",
+      "auth.login_failed": "Anmeldung fehlgeschlagen",
+      "auth.logout": "Abgemeldet",
+      "user.create": "Benutzer angelegt",
+      "user.update": "Benutzer geändert",
+      "user.delete": "Benutzer gelöscht",
+      "token.create": "API-Token erstellt",
+      "token.revoke": "API-Token widerrufen",
+      "unit.create": "Einheit angelegt",
+      "unit.update": "Einheit geändert",
+      "unit.delete": "Einheit gelöscht"
+    },
+    "targetTypes": {
+      "user": "Benutzer",
+      "token": "API-Token",
+      "unit": "Einheit"
+    },
+    "details": {
+      "method": {
+        "password": "Passwort",
+        "oidc": "SSO"
+      },
+      "admin": "Administrator",
+      "notAdmin": "Kein Administrator",
+      "passwordChanged": "Passwort geändert",
+      "forUser": "für {{name}}",
+      "expiresAt": "läuft ab am {{date}}",
+      "changed": "Geändert: {{fields}}",
+      "fields": {
+        "name": "Name",
+        "symbol": "taktisches Zeichen",
+        "tacticalName": "taktischer Name"
+      }
+    }
   }
 }

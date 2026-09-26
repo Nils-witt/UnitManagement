@@ -30,6 +30,8 @@ tags:
     description: Groups synced from the SSO provider (administrators only).
   - name: units
     description: Units and their last known position.
+  - name: audit
+    description: The audit log of sign-ins and changes (administrators only).
   - name: system
     description: Build info and health.
 
@@ -407,6 +409,82 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Group"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/audit-log:
+    get:
+      tags: [audit]
+      summary: List audit log entries
+      description: >-
+        Newest first. Records sign-ins (also failed ones), sign-outs and every
+        change to users, API tokens and units. A unit's position is never
+        recorded, including removing it, since the position history covers
+        it; an update that changes only the position leaves no entry. Page through
+        older entries by passing the last entry's `id` as `before`.
+      operationId: listAuditLog
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of entries to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: before
+          in: query
+          description: Only entries older than the entry with this ID.
+          schema:
+            type: integer
+            minimum: 1
+        - name: action
+          in: query
+          description: Only entries of this action.
+          schema:
+            $ref: "#/components/schemas/AuditAction"
+        - name: actor
+          in: query
+          description: Only entries of the user with this ID.
+          schema:
+            type: integer
+            minimum: 1
+        - name: targetType
+          in: query
+          schema:
+            $ref: "#/components/schemas/AuditTargetType"
+        - name: targetId
+          in: query
+          description: Only entries about the record with this ID, e.g. a unit's UUID.
+          schema:
+            type: string
+        - name: since
+          in: query
+          description: Only entries recorded at or after this time (RFC 3339).
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only entries recorded at or before this time (RFC 3339). Must not be before `since`.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: The matching entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -969,6 +1047,71 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    AuditAction:
+      type: string
+      enum:
+        - auth.login
+        - auth.login_failed
+        - auth.logout
+        - user.create
+        - user.update
+        - user.delete
+        - token.create
+        - token.revoke
+        - unit.create
+        - unit.update
+        - unit.delete
+
+    AuditTargetType:
+      type: string
+      enum: [user, token, unit]
+
+    AuditLogEntry:
+      type: object
+      required: [id, createdAt, action, actor, actorName, targetType, targetId, targetName, details, remoteAddr]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        action:
+          $ref: "#/components/schemas/AuditAction"
+        actor:
+          description: Who acted; null for anonymous requests and once the user is deleted.
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        actorName:
+          type: string
+          description: >-
+            The actor's username at the time; for a failed sign-in, the
+            username that was tried. Empty for other anonymous requests.
+        targetType:
+          description: Type of the record acted on; empty for sign-ins and sign-outs.
+          oneOf:
+            - $ref: "#/components/schemas/AuditTargetType"
+            - type: string
+              const: ""
+        targetId:
+          type: string
+          description: ID of the record acted on, e.g. a unit's UUID.
+        targetName:
+          type: string
+          description: Name of the record acted on at the time.
+        details:
+          type: object
+          additionalProperties: true
+          description: >-
+            Action-specific values: `method` (password or oidc) for sign-ins,
+            `isAdmin` and `passwordChanged` for user updates, `userId`,
+            `username` and `expiresAt` for API tokens, `changed` (the changed
+            fields among name, symbol and tacticalName) for unit updates.
+        remoteAddr:
+          type: string
+          description: The client's IP address.
 
     UserRef:
       type: object

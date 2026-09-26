@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"go-unit-mangement/frontend"
+	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/config"
 	"go-unit-mangement/internal/database"
@@ -92,7 +93,12 @@ func run() error {
 	}
 	go authService.CleanupExpiredSessions(ctx, time.Hour)
 
-	app := server.New(cfg, authService, oidcProvider, units.NewService(db))
+	auditService := audit.NewService(db)
+	if cfg.AuditLogRetention > 0 {
+		go auditService.Cleanup(ctx, cfg.AuditLogRetention, time.Hour)
+	}
+
+	app := server.New(cfg, authService, oidcProvider, units.NewService(db), auditService)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           app.Handler(frontend.Dist()),

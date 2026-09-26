@@ -59,6 +59,10 @@ Set `INSTANCE_NAME` to label the deployment (e.g. `Kreis Nord`); it replaces the
 
 Behind a reverse proxy, set `TRUSTED_PROXIES` to its addresses (comma-separated IPs or CIDRs, e.g. `10.0.0.0/8,::1`) so logs show the real client IP. For requests from those addresses the client is taken from `X-Forwarded-For` (the rightmost entry that isn't a trusted proxy) or `X-Real-IP`; the headers are ignored from anyone else, so they can't be spoofed.
 
+### Audit log
+
+Administrators can see who signed in (and who failed to), and who created, changed or deleted which users, API tokens and units, on the Audit log page or at `GET /api/audit-log`. A unit's position is never recorded, including removing it, since the position history already covers it; an update that changes only the position leaves no entry. Entries are kept forever unless `AUDIT_LOG_RETENTION` is set to a duration (e.g. `2160h` for 90 days); older entries are then deleted hourly.
+
 ## API
 
 The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1).
@@ -76,6 +80,7 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | PUT    | `/api/users/{id}`  | `{isAdmin, password?}` (admin)       |
 | DELETE | `/api/users/{id}`  | Delete user (admin)                  |
 | GET    | `/api/groups`      | List groups with members (admin)     |
+| GET    | `/api/audit-log?limit=&before=&action=&actor=&targetType=&targetId=&since=&to=` | Audit log, newest first (admin) |
 | GET    | `/api/units`       | List units                           |
 | POST   | `/api/units`       | `{name, position?: {lat, lon, height?, accuracy?, speed?, course?, timestamp?}, symbol?, tacticalName?}` |
 | GET    | `/api/units/events` | WebSocket pushing `{type, id, unit?}` on every unit create/update/delete |

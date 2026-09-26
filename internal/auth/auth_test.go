@@ -92,14 +92,14 @@ func TestCreateToken(t *testing.T) {
 	if err := db.Where("user_id = ? AND NOT api_token", user.ID).First(&loginSession).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RevokeToken(ctx, user.ID, loginSession.ID); !errors.Is(err, ErrTokenNotFound) {
+	if _, err := s.RevokeToken(ctx, user.ID, loginSession.ID); !errors.Is(err, ErrTokenNotFound) {
 		t.Errorf("revoke sign-in session: err = %v, want ErrTokenNotFound", err)
 	}
-	if err := s.RevokeToken(ctx, user.ID+1, secondSession.ID); !errors.Is(err, ErrTokenNotFound) {
+	if _, err := s.RevokeToken(ctx, user.ID+1, secondSession.ID); !errors.Is(err, ErrTokenNotFound) {
 		t.Errorf("revoke another user's token: err = %v, want ErrTokenNotFound", err)
 	}
 
-	if err := s.RevokeToken(ctx, user.ID, secondSession.ID); err != nil {
+	if _, err := s.RevokeToken(ctx, user.ID, secondSession.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.UserForToken(ctx, second); !errors.Is(err, ErrInvalidSession) {
@@ -108,7 +108,7 @@ func TestCreateToken(t *testing.T) {
 	if _, err := s.UserForToken(ctx, token); err != nil {
 		t.Fatalf("other token after revoke: %v", err)
 	}
-	if err := s.RevokeToken(ctx, user.ID, secondSession.ID); !errors.Is(err, ErrTokenNotFound) {
+	if _, err := s.RevokeToken(ctx, user.ID, secondSession.ID); !errors.Is(err, ErrTokenNotFound) {
 		t.Errorf("revoke twice: err = %v, want ErrTokenNotFound", err)
 	}
 

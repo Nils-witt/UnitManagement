@@ -116,16 +116,18 @@ func (s *Service) UpdateUser(ctx context.Context, id uint, isAdmin bool, passwor
 	return &user, nil
 }
 
-// DeleteUser removes the user; their sessions go with them (ON DELETE CASCADE).
-func (s *Service) DeleteUser(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&models.User{}, id)
+// DeleteUser removes the user and returns them as they were; their sessions
+// go with them (ON DELETE CASCADE).
+func (s *Service) DeleteUser(ctx context.Context, id uint) (*models.User, error) {
+	var user models.User
+	res := s.db.WithContext(ctx).Clauses(clause.Returning{}).Delete(&user, id)
 	if res.Error != nil {
-		return fmt.Errorf("delete user %d: %w", id, res.Error)
+		return nil, fmt.Errorf("delete user %d: %w", id, res.Error)
 	}
 	if res.RowsAffected == 0 {
-		return ErrUserNotFound
+		return nil, ErrUserNotFound
 	}
-	return nil
+	return &user, nil
 }
 
 func normalizeUsername(username string) (string, error) {

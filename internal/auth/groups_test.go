@@ -92,7 +92,7 @@ func TestSyncOIDCGroups(t *testing.T) {
 	if u, _ := s.GetUser(ctx, user.ID); len(u.Groups) != 1 {
 		t.Errorf("groups after deleting %s = %v", b, u.Groups)
 	}
-	if err := s.DeleteUser(ctx, user.ID); err != nil {
+	if _, err := s.DeleteUser(ctx, user.ID); err != nil {
 		t.Fatal(err)
 	}
 	var left int64

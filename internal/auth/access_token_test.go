@@ -210,7 +210,7 @@ func TestUserForAccessToken(t *testing.T) {
 	}
 
 	// A deleted account stops working even while its token is cached.
-	if err := s.DeleteUser(ctx, user.ID); err != nil {
+	if _, err := s.DeleteUser(ctx, user.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.UserForToken(ctx, withGroups); !errors.Is(err, ErrInvalidSession) {

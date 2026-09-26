@@ -21,7 +21,8 @@
     "users": "Users",
     "units": "Units",
     "map": "Map",
-    "groups": "Groups"
+    "groups": "Groups",
+    "auditLog": "Audit log"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -228,5 +229,55 @@
     "rangeFrom": "From",
     "rangeTo": "To",
     "rangeInvalid": "Must not be before From"
+  },
+  "auditLog": {
+    "actionFilter": "Action",
+    "allActions": "All actions",
+    "positionNotice": "Position updates are not listed here; see a unit's position history.",
+    "refresh": "Refresh",
+    "loadMore": "Load older entries",
+    "empty": "No entries found",
+    "time": "Time",
+    "user": "User",
+    "action": "Action",
+    "target": "Target",
+    "detailsColumn": "Details",
+    "address": "IP address",
+    "deletedUser": "deleted",
+    "actions": {
+      "auth.login": "Signed in",
+      "auth.login_failed": "Sign-in failed",
+      "auth.logout": "Signed out",
+      "user.create": "User created",
+      "user.update": "User changed",
+      "user.delete": "User deleted",
+      "token.create": "API token created",
+      "token.revoke": "API token revoked",
+      "unit.create": "Unit created",
+      "unit.update": "Unit changed",
+      "unit.delete": "Unit deleted"
+    },
+    "targetTypes": {
+      "user": "User",
+      "token": "API token",
+      "unit": "Unit"
+    },
+    "details": {
+      "method": {
+        "password": "Password",
+        "oidc": "SSO"
+      },
+      "admin": "Administrator",
+      "notAdmin": "Not an administrator",
+      "passwordChanged": "Password changed",
+      "forUser": "for {{name}}",
+      "expiresAt": "expires {{date}}",
+      "changed": "Changed: {{fields}}",
+      "fields": {
+        "name": "name",
+        "symbol": "tactical symbol",
+        "tacticalName": "tactical name"
+      }
+    }
   }
 }

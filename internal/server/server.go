@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/config"
 	"go-unit-mangement/internal/units"
@@ -20,6 +21,7 @@ type Server struct {
 	// oidc is nil when SSO is not configured.
 	oidc  *auth.OIDCProvider
 	units *units.Service
+	audit *audit.Service
 	// shutdown is closed by CloseStreams to end long-lived connections;
 	// streams tracks the ones still open.
 	shutdown     chan struct{}
@@ -27,8 +29,8 @@ type Server struct {
 	streams      sync.WaitGroup
 }
 
-func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service) *Server {
-	return &Server{cfg: cfg, auth: authService, oidc: oidc, units: unitService, shutdown: make(chan struct{})}
+func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service, auditService *audit.Service) *Server {
+	return &Server{cfg: cfg, auth: authService, oidc: oidc, units: unitService, audit: auditService, shutdown: make(chan struct{})}
 }
 
 // CloseStreams ends every open event stream and waits until they are closed
@@ -73,6 +75,7 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("POST /api/users/{id}/tokens", admin(s.handleCreateToken))
 	mux.Handle("DELETE /api/users/{id}/tokens/{tokenId}", admin(s.handleRevokeToken))
 	mux.Handle("GET /api/groups", admin(s.handleListGroups))
+	mux.Handle("GET /api/audit-log", admin(s.handleListAuditLog))
 
 	mux.Handle("GET /api/units", authed(s.handleListUnits))
 	mux.Handle("GET /api/units/events", authed(s.handleUnitEvents))

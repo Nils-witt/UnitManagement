@@ -167,3 +167,44 @@ export interface UnitInput {
 /** A message on the unit event stream (GET /api/units/events). */
 export type UnitEvent =
   { type: 'created' | 'updated'; id: string; unit: Unit } | { type: 'deleted'; id: string };
+
+export const AUDIT_ACTIONS = [
+  'auth.login',
+  'auth.login_failed',
+  'auth.logout',
+  'user.create',
+  'user.update',
+  'user.delete',
+  'token.create',
+  'token.revoke',
+  'unit.create',
+  'unit.update',
+  'unit.delete',
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/** One entry of the audit log (GET /api/audit-log). */
+export interface AuditLogEntry {
+  id: number;
+  createdAt: string;
+  action: AuditAction;
+  /** Null for anonymous requests and once the user is deleted. */
+  actor: UserRef | null;
+  /** The actor's username at the time; for a failed sign-in, the one tried. */
+  actorName: string;
+  /** Empty for sign-ins and sign-outs. */
+  targetType: '' | 'user' | 'token' | 'unit';
+  targetId: string;
+  targetName: string;
+  /** Action-specific values, e.g. `changed` for unit updates. */
+  details: Record<string, unknown>;
+  remoteAddr: string;
+}
+
+export interface AuditLogQuery {
+  action?: AuditAction;
+  /** Only entries older than the one with this ID, to load the next page. */
+  before?: number;
+  limit?: number;
+}

@@ -7,11 +7,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 
+	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/models"
 	"go-unit-mangement/internal/units"
@@ -267,6 +269,7 @@ func (s *Server) handleCreateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("unit created", "by", current.Username, "unit", unit.Name, "id", unit.ID)
+	s.record(r, audit.Entry{Action: audit.ActionUnitCreate, TargetType: audit.TargetUnit, TargetID: unit.ID.String(), TargetName: unit.Name})
 	writeJSON(w, http.StatusCreated, toUnitResponse(unit))
 }
 
@@ -280,12 +283,13 @@ func (s *Server) handleUpdateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	current := auth.UserFromContext(r.Context())
-	unit, err := s.units.Update(r.Context(), id, req.input(), current)
+	unit, changed, err := s.units.Update(r.Context(), id, req.input(), current)
 	if err != nil {
 		writeUnitError(w, err)
 		return
 	}
 	slog.Info("unit updated", "by", current.Username, "unit", unit.Name, "id", unit.ID)
+	s.recordUnitUpdate(r, unit, changed)
 	writeJSON(w, http.StatusOK, toUnitResponse(unit))
 }
 
@@ -308,12 +312,13 @@ func (s *Server) handlePatchUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	current := auth.UserFromContext(r.Context())
-	unit, err := s.units.Patch(r.Context(), id, patch, current)
+	unit, changed, err := s.units.Patch(r.Context(), id, patch, current)
 	if err != nil {
 		writeUnitError(w, err)
 		return
 	}
 	slog.Info("unit patched", "by", current.Username, "unit", unit.Name, "id", unit.ID)
+	s.recordUnitUpdate(r, unit, changed)
 	writeJSON(w, http.StatusOK, toUnitResponse(unit))
 }
 
@@ -322,12 +327,38 @@ func (s *Server) handleDeleteUnit(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.units.Delete(r.Context(), id); err != nil {
+	unit, err := s.units.Delete(r.Context(), id)
+	if err != nil {
 		writeUnitError(w, err)
 		return
 	}
 	slog.Info("unit deleted", "by", auth.UserFromContext(r.Context()).Username, "id", id)
+	s.record(r, audit.Entry{Action: audit.ActionUnitDelete, TargetType: audit.TargetUnit, TargetID: id.String(), TargetName: unit.Name})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// recordUnitUpdate adds an update of unit that changed the given fields to
+// the audit log, unless only its position changed (see auditedUnitFields).
+func (s *Server) recordUnitUpdate(r *http.Request, unit *models.Unit, changed []units.Field) {
+	changed = auditedUnitFields(changed)
+	if len(changed) == 0 {
+		return
+	}
+	s.record(r, audit.Entry{
+		Action: audit.ActionUnitUpdate, TargetType: audit.TargetUnit, TargetID: unit.ID.String(), TargetName: unit.Name,
+		Details: map[string]any{"changed": changed},
+	})
+}
+
+// auditedUnitFields returns the changed fields that belong in the audit log.
+// The position is never audited: trackers report it many times a minute and
+// the position history already records who set each one.
+func auditedUnitFields(changed []units.Field) []units.Field {
+	changed = slices.DeleteFunc(slices.Clone(changed), func(f units.Field) bool { return f == units.FieldPosition })
+	if len(changed) == 0 {
+		return nil
+	}
+	return changed
 }
 
 func unitIDFromPath(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {

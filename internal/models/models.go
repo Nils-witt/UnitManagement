@@ -162,3 +162,27 @@ type UnitPosition struct {
 	RecordedByID *uint
 	RecordedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
 }
+
+// AuditLog is one entry of the audit log: who did what to which record, and
+// from where. Entries are never changed; old ones may be deleted after the
+// retention period (see audit.Service.Cleanup).
+type AuditLog struct {
+	ID        uint      `gorm:"primaryKey"`
+	CreatedAt time.Time `gorm:"index"`
+	// ActorID becomes nil when that user is deleted; ActorName keeps their
+	// username as of the action. Both are unset for anonymous actions, except
+	// that a failed sign-in keeps the username that was tried.
+	ActorID   *uint  `gorm:"index"`
+	Actor     *User  `gorm:"constraint:OnDelete:SET NULL"`
+	ActorName string `gorm:"not null;default:''"`
+	Action    string `gorm:"not null;index"`
+	// TargetType, TargetID and TargetName identify the record acted on, e.g.
+	// "unit", its UUID and its name at the time. They are empty for actions
+	// without one.
+	TargetType string `gorm:"not null;default:'';index:idx_audit_logs_target,priority:1"`
+	TargetID   string `gorm:"not null;default:'';index:idx_audit_logs_target,priority:2"`
+	TargetName string `gorm:"not null;default:''"`
+	// Details holds action-specific values, e.g. which fields changed.
+	Details    map[string]any `gorm:"serializer:json;type:jsonb"`
+	RemoteAddr string         `gorm:"not null;default:''"`
+}

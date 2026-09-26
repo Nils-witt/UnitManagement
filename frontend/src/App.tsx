@@ -21,6 +21,7 @@ import { ROUTE_SEGMENTS } from './routes.ts';
 const HomePage = lazy(() => import('./pages/HomePage.tsx'));
 const UsersPage = lazy(() => import('./pages/UsersPage.tsx'));
 const GroupsPage = lazy(() => import('./pages/GroupsPage.tsx'));
+const AuditLogPage = lazy(() => import('./pages/AuditLogPage.tsx'));
 const UnitsPage = lazy(() => import('./pages/UnitsPage.tsx'));
 const MapPage = lazy(() => import('./pages/MapPage.tsx'));
 
@@ -54,6 +55,7 @@ export default function App() {
                         <Route element={<AdminOnlyRoute />}>
                           <Route path={ROUTE_SEGMENTS.users} element={<UsersPage />} />
                           <Route path={ROUTE_SEGMENTS.groups} element={<GroupsPage />} />
+                          <Route path={ROUTE_SEGMENTS.auditLog} element={<AuditLogPage />} />
                         </Route>
                         <Route path="*" element={<NotFoundPage />} />
                       </Route>

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/models"
 )
@@ -73,6 +74,10 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("user created", "by", auth.UserFromContext(r.Context()).Username, "user", user.Username, "isAdmin", user.IsAdmin)
+	s.record(r, audit.Entry{
+		Action: audit.ActionUserCreate, TargetType: audit.TargetUser, TargetID: formatID(user.ID), TargetName: user.Username,
+		Details: map[string]any{"isAdmin": user.IsAdmin},
+	})
 	writeJSON(w, http.StatusCreated, s.toUserResponse(user))
 }
 
@@ -91,12 +96,12 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "you cannot remove your own administrator role")
 		return
 	}
+	target, err := s.auth.GetUser(r.Context(), id)
+	if err != nil {
+		writeUserError(w, err)
+		return
+	}
 	if s.oidc.ManagesAdminRole() {
-		target, err := s.auth.GetUser(r.Context(), id)
-		if err != nil {
-			writeUserError(w, err)
-			return
-		}
 		if s.adminManaged(target) && target.IsAdmin != req.IsAdmin {
 			writeError(w, http.StatusBadRequest, "the administrator role of SSO accounts is managed by the provider's groups")
 			return
@@ -108,6 +113,16 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("user updated", "by", current.Username, "user", user.Username, "isAdmin", user.IsAdmin, "passwordChanged", req.Password != "")
+	if target.IsAdmin != user.IsAdmin || req.Password != "" {
+		details := map[string]any{"passwordChanged": req.Password != ""}
+		if target.IsAdmin != user.IsAdmin {
+			details["isAdmin"] = user.IsAdmin
+		}
+		s.record(r, audit.Entry{
+			Action: audit.ActionUserUpdate, TargetType: audit.TargetUser, TargetID: formatID(user.ID), TargetName: user.Username,
+			Details: details,
+		})
+	}
 	writeJSON(w, http.StatusOK, s.toUserResponse(user))
 }
 
@@ -121,11 +136,13 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "you cannot delete your own account")
 		return
 	}
-	if err := s.auth.DeleteUser(r.Context(), id); err != nil {
+	deleted, err := s.auth.DeleteUser(r.Context(), id)
+	if err != nil {
 		writeUserError(w, err)
 		return
 	}
 	slog.Info("user deleted", "by", current.Username, "id", id)
+	s.record(r, audit.Entry{Action: audit.ActionUserDelete, TargetType: audit.TargetUser, TargetID: formatID(id), TargetName: deleted.Username})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -151,6 +168,10 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("api token created", "by", auth.UserFromContext(r.Context()).Username, "user", session.User.Username, "token", session.ID, "name", session.Name, "expiresAt", session.ExpiresAt)
+	s.record(r, audit.Entry{
+		Action: audit.ActionTokenCreate, TargetType: audit.TargetToken, TargetID: formatID(session.ID), TargetName: session.Name,
+		Details: map[string]any{"userId": session.UserID, "username": session.User.Username, "expiresAt": session.ExpiresAt},
+	})
 	writeJSON(w, http.StatusCreated, createdTokenResponse{
 		apiTokenResponse: toAPITokenResponse(session),
 		Token:            token,
@@ -185,13 +206,25 @@ func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, auth.ErrTokenNotFound.Error())
 		return
 	}
-	if err := s.auth.RevokeToken(r.Context(), id, uint(tokenID)); err != nil {
+	token, err := s.auth.RevokeToken(r.Context(), id, uint(tokenID))
+	if err != nil {
 		writeUserError(w, err)
 		return
 	}
 	slog.Info("api token revoked", "by", auth.UserFromContext(r.Context()).Username, "user", id, "token", tokenID)
+	details := map[string]any{"userId": id}
+	if user, err := s.auth.GetUser(r.Context(), id); err == nil {
+		details["username"] = user.Username
+	}
+	s.record(r, audit.Entry{
+		Action: audit.ActionTokenRevoke, TargetType: audit.TargetToken, TargetID: formatID(token.ID), TargetName: token.Name,
+		Details: details,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// formatID formats a numeric ID for the audit log.
+func formatID(id uint) string { return strconv.FormatUint(uint64(id), 10) }
 
 func userIDFromPath(w http.ResponseWriter, r *http.Request) (uint, bool) {
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 0)

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 )
 
@@ -88,6 +89,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("oidc login", "user", user.Username)
+	s.record(r, audit.Entry{Action: audit.ActionLogin, Actor: user, Details: map[string]any{"method": "oidc"}})
 
 	// http.Redirect would clean the fragment as part of the path, so the
 	// Location header is set directly.

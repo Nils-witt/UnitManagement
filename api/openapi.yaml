@@ -924,7 +924,11 @@ paths:
     put:
       tags: [units]
       summary: Update a unit
-      description: Replaces the unit's name, position, symbol and tactical name; a missing or null position, symbol or tactical name clears it.
+      description: >
+        Replaces the unit's name, symbol and tactical name; a missing or null
+        symbol or tactical name clears it. The position is left alone; it is
+        set via `PUT /api/units/{id}/position`, and a body with `position` is
+        rejected.
       operationId: updateUnit
       requestBody:
         required: true
@@ -953,9 +957,10 @@ paths:
       tags: [units]
       summary: Partially update a unit
       description: >
-        Changes only the fields present in the body. A null position, symbol or
-        tactical name clears it; position, symbol and tactical name are
-        replaced as a whole, not merged.
+        Changes only the fields present in the body. A null symbol or tactical
+        name clears it; symbol and tactical name are replaced as a whole, not
+        merged. The position is set via `PUT /api/units/{id}/position`, and a
+        body with `position` is rejected.
       operationId: patchUnit
       requestBody:
         required: true
@@ -987,6 +992,61 @@ paths:
       responses:
         "204":
           description: The unit was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/UnitNotFound"
+        "409":
+          $ref: "#/components/responses/UnitSynced"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/units/{id}/position:
+    parameters:
+      - $ref: "#/components/parameters/UnitId"
+    put:
+      tags: [units]
+      summary: Set a unit's position
+      description: >
+        Sets the unit's current position and adds it to the position history.
+        Setting the position it already has changes nothing. Position changes
+        are not audited; the history records who set each one.
+      operationId: setUnitPosition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Position"
+      responses:
+        "200":
+          description: The unit with its new position.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/UnitNotFound"
+        "409":
+          $ref: "#/components/responses/UnitSynced"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [units]
+      summary: Clear a unit's position
+      description: Clears the unit's current position; its position history is kept.
+      operationId: clearUnitPosition
+      responses:
+        "200":
+          description: The unit without a position.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1549,6 +1609,7 @@ components:
 
     UnitRequest:
       type: object
+      description: The position is not part of it; see `PUT /api/units/{id}/position`.
       required: [name]
       properties:
         name:
@@ -1556,11 +1617,6 @@ components:
           description: Surrounding whitespace is trimmed; must be unique.
           minLength: 1
           maxLength: 64
-        position:
-          description: A missing or null position clears it.
-          oneOf:
-            - $ref: "#/components/schemas/Position"
-            - type: "null"
         symbol:
           description: A missing or null symbol, or one without components, clears it.
           oneOf:
@@ -1581,11 +1637,6 @@ components:
           description: Surrounding whitespace is trimmed; must be unique.
           minLength: 1
           maxLength: 64
-        position:
-          description: A null position clears it.
-          oneOf:
-            - $ref: "#/components/schemas/Position"
-            - type: "null"
         symbol:
           description: A null symbol, or one without components, clears it.
           oneOf:
@@ -1680,6 +1731,9 @@ components:
         name:
           type: string
         position:
+          description: >
+            The current position; null when unknown. Read-only here, set via
+            `PUT /api/units/{id}/position`.
           oneOf:
             - $ref: "#/components/schemas/Position"
             - type: "null"

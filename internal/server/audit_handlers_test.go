@@ -2,12 +2,10 @@ package server
 
 import (
 	"net/url"
-	"slices"
 	"testing"
 	"time"
 
 	"go-unit-mangement/internal/audit"
-	"go-unit-mangement/internal/units"
 )
 
 func TestParseAuditFilter(t *testing.T) {
@@ -50,25 +48,5 @@ func TestTruncate(t *testing.T) {
 	}
 	if got := truncate("abc", 5); got != "abc" {
 		t.Errorf("got %q, want %q", got, "abc")
-	}
-}
-
-func TestAuditedUnitFields(t *testing.T) {
-	tests := []struct {
-		changed, want []units.Field
-	}{
-		{nil, nil},
-		{[]units.Field{units.FieldPosition}, nil},
-		{[]units.Field{units.FieldName, units.FieldPosition}, []units.Field{units.FieldName}},
-		{[]units.Field{units.FieldSymbol, units.FieldTacticalName}, []units.Field{units.FieldSymbol, units.FieldTacticalName}},
-	}
-	for _, tt := range tests {
-		in := slices.Clone(tt.changed)
-		if got := auditedUnitFields(in); !slices.Equal(got, tt.want) {
-			t.Errorf("auditedUnitFields(%v) = %v, want %v", tt.changed, got, tt.want)
-		}
-		if !slices.Equal(in, tt.changed) {
-			t.Errorf("auditedUnitFields modified its argument to %v", in)
-		}
 	}
 }

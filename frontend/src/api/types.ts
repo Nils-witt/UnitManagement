@@ -224,10 +224,14 @@ export interface SyncRemoteRef {
   name: string;
 }
 
+/** The body of PUT /api/units/{id}/position. Omitting `timestamp` means
+ * "now". */
+export type PositionInput = Omit<Position, 'timestamp'> & { timestamp?: string };
+
+/** A unit's editable fields; the position is set separately (see
+ * PositionInput). */
 export interface UnitInput {
   name: string;
-  /** Null clears the position. Omitting `timestamp` means "now". */
-  position: (Omit<Position, 'timestamp'> & { timestamp?: string }) | null;
   /** Null clears the symbol. */
   symbol: UnitSymbol | null;
   /** Null clears the tactical name. */

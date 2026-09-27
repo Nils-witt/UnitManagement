@@ -49,6 +49,9 @@ func TestUpsertSynced(t *testing.T) {
 	if _, _, err := s.Update(ctx, id, in, user); !errors.Is(err, ErrUnitSynced) {
 		t.Errorf("local update: err = %v, want ErrUnitSynced", err)
 	}
+	if _, err := s.SetPosition(ctx, id, nil, user); !errors.Is(err, ErrUnitSynced) {
+		t.Errorf("local position change: err = %v, want ErrUnitSynced", err)
+	}
 	if _, err := s.Delete(ctx, id); !errors.Is(err, ErrUnitSynced) {
 		t.Errorf("local delete: err = %v, want ErrUnitSynced", err)
 	}

@@ -127,10 +127,23 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 	return unit, nil
 }
 
-// Update replaces the unit's editable fields with in. It also returns which
-// of them changed (see Changed).
+// Update replaces the unit's editable fields with in, except the position,
+// which only SetPosition changes; in.Position is ignored. It also returns
+// which fields changed (see Changed).
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models.User) (*models.Unit, []Field, error) {
-	return s.Patch(ctx, id, func(cur *Input) { *cur = in }, by)
+	return s.Patch(ctx, id, func(cur *Input) {
+		pos := cur.Position
+		*cur = in
+		cur.Position = pos
+	}, by)
+}
+
+// SetPosition sets the unit's position, or clears it when p is nil, and
+// records a new one in the position history. Setting the current position
+// again changes nothing (see Patch).
+func (s *Service) SetPosition(ctx context.Context, id uuid.UUID, p *Position, by *models.User) (*models.Unit, error) {
+	unit, _, err := s.Patch(ctx, id, func(in *Input) { in.Position = p }, by)
+	return unit, err
 }
 
 // Patch updates the unit like Update, with the input patch makes of the

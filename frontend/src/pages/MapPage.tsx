@@ -247,7 +247,6 @@ export default function MapPage() {
     const onClick = (e: maplibregl.MapMouseEvent) => {
       setMovingId(null);
       setError(null);
-      const { name, symbol, tacticalName } = movingUnit;
       // The old height, accuracy and motion don't apply to the new place; the
       // server stamps the position with the current time.
       const position = {
@@ -259,7 +258,7 @@ export default function MapPage() {
         course: null,
       };
       api
-        .updateUnit(movingUnit.id, { name, position, symbol, tacticalName })
+        .setUnitPosition(movingUnit.id, position)
         .then(reloadUnits)
         .catch((err: unknown) => setError(errorMessage(err)));
     };

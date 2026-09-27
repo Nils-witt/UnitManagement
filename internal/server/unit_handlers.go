@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"time"
 
@@ -36,18 +35,20 @@ type positionJSON struct {
 }
 
 // unitRequest is the body of both create and update; a null or missing
-// position, symbol or tactical name clears it.
+// symbol or tactical name clears it. The position is set separately (see
+// handleSetUnitPosition) and is rejected here.
 type unitRequest struct {
-	Name     string        `json:"name"`
-	Position *positionJSON `json:"position"`
+	Name     string          `json:"name"`
+	Position json.RawMessage `json:"position"`
 	// Symbol's and TacticalName's JSON shapes are defined by their struct tags.
 	Symbol       *models.UnitSymbol   `json:"symbol"`
 	TacticalName *models.TacticalName `json:"tacticalName"`
 }
 
 // unitPatchRequest is the body of a patch. A missing field is left
-// unchanged; a null position, symbol or tactical name clears it. Position,
-// symbol and tactical name are replaced as a whole, not merged.
+// unchanged; a null symbol or tactical name clears it. Symbol and tactical
+// name are replaced as a whole, not merged. Position is only there to be
+// rejected, as in unitRequest.
 type unitPatchRequest struct {
 	Name         json.RawMessage `json:"name"`
 	Position     json.RawMessage `json:"position"`
@@ -137,18 +138,34 @@ func toUserRef(u *models.User) *userRefResponse {
 }
 
 func (req *unitRequest) input() units.Input {
-	in := units.Input{Name: req.Name, Symbol: req.Symbol, TacticalName: req.TacticalName}
-	if p := req.Position; p != nil {
-		ts := time.Now()
-		if p.Timestamp != nil {
-			ts = *p.Timestamp
-		}
-		in.Position = &units.Position{
-			Latitude: p.Lat, Longitude: p.Lon, Height: p.Height, Accuracy: p.Accuracy,
-			Speed: p.Speed, Course: p.Course, Timestamp: ts,
-		}
+	return units.Input{Name: req.Name, Symbol: req.Symbol, TacticalName: req.TacticalName}
+}
+
+// position converts p, stamping it with the current time unless it has a
+// timestamp.
+func (p *positionJSON) position() *units.Position {
+	ts := time.Now()
+	if p.Timestamp != nil {
+		ts = *p.Timestamp
 	}
-	return in
+	return &units.Position{
+		Latitude: p.Lat, Longitude: p.Lon, Height: p.Height, Accuracy: p.Accuracy,
+		Speed: p.Speed, Course: p.Course, Timestamp: ts,
+	}
+}
+
+// errPositionInUnitBody is returned for unit bodies that still carry a
+// position.
+var errPositionInUnitBody = errors.New("position is set via PUT /api/units/{id}/position")
+
+// rejectPosition writes a 400 response and returns true when a unit body
+// contains a position.
+func rejectPosition(w http.ResponseWriter, position json.RawMessage) bool {
+	if position == nil {
+		return false
+	}
+	writeError(w, http.StatusBadRequest, errPositionInUnitBody.Error())
+	return true
 }
 
 // patch returns the function applying req to a unit's current input, or an
@@ -160,7 +177,6 @@ func (req *unitPatchRequest) patch() (func(*units.Input), error) {
 		v   any
 	}{
 		{req.Name, &fields.Name},
-		{req.Position, &fields.Position},
 		{req.Symbol, &fields.Symbol},
 		{req.TacticalName, &fields.TacticalName},
 	} {
@@ -178,9 +194,6 @@ func (req *unitPatchRequest) patch() (func(*units.Input), error) {
 	return func(in *units.Input) {
 		if req.Name != nil {
 			in.Name = patched.Name
-		}
-		if req.Position != nil {
-			in.Position = patched.Position
 		}
 		if req.Symbol != nil {
 			in.Symbol = patched.Symbol
@@ -270,7 +283,7 @@ func (s *Server) handleUnitPositions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateUnit(w http.ResponseWriter, r *http.Request) {
 	var req unitRequest
-	if !decodeJSON(w, r, &req) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) {
 		return
 	}
 	current := auth.UserFromContext(r.Context())
@@ -290,7 +303,7 @@ func (s *Server) handleUpdateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req unitRequest
-	if !decodeJSON(w, r, &req) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) {
 		return
 	}
 	current := auth.UserFromContext(r.Context())
@@ -310,7 +323,7 @@ func (s *Server) handlePatchUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req unitPatchRequest
-	if !decodeJSON(w, r, &req) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) {
 		return
 	}
 	patch, err := req.patch()
@@ -333,6 +346,41 @@ func (s *Server) handlePatchUnit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toUnitResponse(unit))
 }
 
+// handleSetUnitPosition sets the unit's position. Like every position change
+// it is recorded in the position history, not the audit log.
+func (s *Server) handleSetUnitPosition(w http.ResponseWriter, r *http.Request) {
+	id, ok := unitIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	var req positionJSON
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	s.setUnitPosition(w, r, id, req.position())
+}
+
+func (s *Server) handleClearUnitPosition(w http.ResponseWriter, r *http.Request) {
+	id, ok := unitIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	s.setUnitPosition(w, r, id, nil)
+}
+
+// setUnitPosition sets the unit's position, or clears it when p is nil, and
+// responds with the unit.
+func (s *Server) setUnitPosition(w http.ResponseWriter, r *http.Request, id uuid.UUID, p *units.Position) {
+	current := auth.UserFromContext(r.Context())
+	unit, err := s.units.SetPosition(r.Context(), id, p, current)
+	if err != nil {
+		writeUnitError(w, err)
+		return
+	}
+	slog.Debug("unit position set", "by", current.Username, "id", id, "cleared", p == nil)
+	writeJSON(w, http.StatusOK, toUnitResponse(unit))
+}
+
 func (s *Server) handleDeleteUnit(w http.ResponseWriter, r *http.Request) {
 	id, ok := unitIDFromPath(w, r)
 	if !ok {
@@ -349,9 +397,9 @@ func (s *Server) handleDeleteUnit(w http.ResponseWriter, r *http.Request) {
 }
 
 // recordUnitUpdate adds an update of unit that changed the given fields to
-// the audit log, unless only its position changed (see auditedUnitFields).
+// the audit log, unless nothing changed. Position changes never get here: the
+// position history records them.
 func (s *Server) recordUnitUpdate(r *http.Request, unit *models.Unit, changed []units.Field) {
-	changed = auditedUnitFields(changed)
 	if len(changed) == 0 {
 		return
 	}
@@ -359,17 +407,6 @@ func (s *Server) recordUnitUpdate(r *http.Request, unit *models.Unit, changed []
 		Action: audit.ActionUnitUpdate, TargetType: audit.TargetUnit, TargetID: unit.ID.String(), TargetName: unit.Name,
 		Details: map[string]any{"changed": changed},
 	})
-}
-
-// auditedUnitFields returns the changed fields that belong in the audit log.
-// The position is never audited: trackers report it many times a minute and
-// the position history already records who set each one.
-func auditedUnitFields(changed []units.Field) []units.Field {
-	changed = slices.DeleteFunc(slices.Clone(changed), func(f units.Field) bool { return f == units.FieldPosition })
-	if len(changed) == 0 {
-		return nil
-	}
-	return changed
 }
 
 func unitIDFromPath(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {

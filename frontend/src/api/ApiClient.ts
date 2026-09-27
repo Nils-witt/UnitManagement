@@ -20,6 +20,7 @@ import type {
   InstanceInfo,
   LoginResponse,
   PositionHistoryEntry,
+  PositionInput,
   Settings,
   SyncIdentity,
   SyncLogEntry,
@@ -265,6 +266,16 @@ export class ApiClient {
 
   updateUnit(id: string, input: UnitInput): Promise<Unit> {
     return this.sendJsonForJson(`/api/units/${id}`, 'PUT', input);
+  }
+
+  /** Sets the unit's current position and records it in its history. */
+  setUnitPosition(id: string, position: PositionInput): Promise<Unit> {
+    return this.sendJsonForJson(`/api/units/${id}/position`, 'PUT', position);
+  }
+
+  /** Clears the unit's current position; its history is kept. */
+  clearUnitPosition(id: string): Promise<Unit> {
+    return this.sendJsonForJson(`/api/units/${id}/position`, 'DELETE', undefined);
   }
 
   /** The unit's position history, newest measurement first; `since` and `to`

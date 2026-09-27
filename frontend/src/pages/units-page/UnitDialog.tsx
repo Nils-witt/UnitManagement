@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { Button, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Unit, UnitInput } from '../../api/types';
+import type { PositionInput, Unit, UnitInput } from '../../api/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import Modal from '../../components/Modal';
 import { errorMessage } from '../../lib/errors';
@@ -22,6 +22,14 @@ function inRange(value: number, limit: number): boolean {
   return Number.isFinite(value) && value >= -limit && value <= limit;
 }
 
+/** What the dialog submits. The position is set through its own endpoint, so
+ * it is separate from the unit's fields: undefined leaves it unchanged, null
+ * clears it. */
+export interface UnitSubmission {
+  unit: UnitInput;
+  position?: PositionInput | null;
+}
+
 /** Mounted by the modal only while it is open, so it starts fresh each time. */
 function UnitForm({
   unit,
@@ -30,7 +38,7 @@ function UnitForm({
 }: {
   unit: Unit | null;
   onClose: () => void;
-  onSubmit: (input: UnitInput) => Promise<void>;
+  onSubmit: (submission: UnitSubmission) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const editing = unit != null;
@@ -91,36 +99,39 @@ function UnitForm({
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    let position: UnitInput['position'] = null;
+    // An unchanged position isn't sent, so it keeps when it was measured; a
+    // new one is stamped with the current time by the server.
+    let position: UnitSubmission['position'];
     if (hasPosition) {
-      position = {
-        lat: latValue,
-        lon: lonValue,
-        height: heightValue,
-        accuracy: accuracyValue,
-        speed: speedValue,
-        course: courseValue,
-      };
-      // An unchanged position keeps when it was measured; a new one is
-      // stamped with the current time by the server.
-      if (
-        initial &&
+      const unchanged =
+        initial != null &&
         initial.lat === latValue &&
         initial.lon === lonValue &&
         initial.height === heightValue &&
         initial.accuracy === accuracyValue &&
         initial.speed === speedValue &&
-        initial.course === courseValue
-      ) {
-        position.timestamp = initial.timestamp;
+        initial.course === courseValue;
+      if (!unchanged) {
+        position = {
+          lat: latValue,
+          lon: lonValue,
+          height: heightValue,
+          accuracy: accuracyValue,
+          speed: speedValue,
+          course: courseValue,
+        };
       }
+    } else if (initial != null) {
+      position = null;
     }
     try {
       await onSubmit({
-        name: name.trim(),
+        unit: {
+          name: name.trim(),
+          symbol: cleanSymbol(symbol),
+          tacticalName: cleanTacticalName(tacticalName),
+        },
         position,
-        symbol: cleanSymbol(symbol),
-        tacticalName: cleanTacticalName(tacticalName),
       });
       onClose();
     } catch (err) {
@@ -240,7 +251,7 @@ export default function UnitDialog({
   open: boolean;
   unit: Unit | null;
   onClose: () => void;
-  onSubmit: (input: UnitInput) => Promise<void>;
+  onSubmit: (submission: UnitSubmission) => Promise<void>;
 }) {
   const { t } = useTranslation();
   return (

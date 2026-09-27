@@ -3,6 +3,8 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -39,30 +41,9 @@ func TestUnitPatchRequest(t *testing.T) {
 				t.Errorf("got %+v, want only name changed", in)
 			}
 		}},
-		{"null clears", `{"position":null,"symbol":null,"tacticalName":null}`, func(t *testing.T, in units.Input) {
-			if in.Name != "Alpha" || in.Position != nil || in.Symbol != nil || in.TacticalName != nil {
-				t.Errorf("got %+v, want name kept and rest cleared", in)
-			}
-		}},
-		{"position replaced", `{"position":{"lat":5,"lon":6}}`, func(t *testing.T, in units.Input) {
-			p := in.Position
-			if p == nil || p.Latitude != 5 || p.Longitude != 6 || p.Height != nil || p.Accuracy != nil ||
-				p.Speed != nil || p.Course != nil {
-				t.Errorf("got position %+v, want 5/6 without height, accuracy, speed and course", p)
-			}
-			if in.Symbol == nil {
-				t.Error("symbol cleared, want unchanged")
-			}
-		}},
-		{"position with accuracy", `{"position":{"lat":5,"lon":6,"accuracy":8.5}}`, func(t *testing.T, in units.Input) {
-			if p := in.Position; p == nil || p.Accuracy == nil || *p.Accuracy != 8.5 {
-				t.Errorf("got position %+v, want accuracy 8.5", p)
-			}
-		}},
-		{"position with speed and course", `{"position":{"lat":5,"lon":6,"speed":12.5,"course":270}}`, func(t *testing.T, in units.Input) {
-			p := in.Position
-			if p == nil || p.Speed == nil || *p.Speed != 12.5 || p.Course == nil || *p.Course != 270 {
-				t.Errorf("got position %+v, want speed 12.5 and course 270", p)
+		{"null clears", `{"symbol":null,"tacticalName":null}`, func(t *testing.T, in units.Input) {
+			if in.Name != "Alpha" || in.Position == nil || in.Symbol != nil || in.TacticalName != nil {
+				t.Errorf("got %+v, want name and position kept and rest cleared", in)
 			}
 		}},
 	}
@@ -84,7 +65,7 @@ func TestUnitPatchRequest(t *testing.T) {
 }
 
 func TestUnitPatchRequestErrors(t *testing.T) {
-	for _, body := range []string{`{"name":null}`, `{"name":5}`, `{"position":"x"}`} {
+	for _, body := range []string{`{"name":null}`, `{"name":5}`, `{"symbol":"x"}`} {
 		var req unitPatchRequest
 		if err := json.Unmarshal([]byte(body), &req); err != nil {
 			t.Fatal(err)
@@ -97,6 +78,48 @@ func TestUnitPatchRequestErrors(t *testing.T) {
 	_ = json.Unmarshal([]byte(`{"name":null}`), &req)
 	if _, err := req.patch(); !errors.Is(err, units.ErrInvalidName) {
 		t.Errorf("null name: got %v, want ErrInvalidName", err)
+	}
+}
+
+func TestRejectPosition(t *testing.T) {
+	for _, tt := range []struct {
+		body   string
+		reject bool
+	}{
+		{`{"name":"Alpha"}`, false},
+		{`{"name":"Alpha","position":{"lat":1,"lon":2}}`, true},
+		{`{"position":null}`, true},
+	} {
+		var req unitRequest
+		if err := json.Unmarshal([]byte(tt.body), &req); err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		if got := rejectPosition(w, req.Position); got != tt.reject {
+			t.Errorf("%s: rejected = %v, want %v", tt.body, got, tt.reject)
+		}
+		if tt.reject && w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", tt.body, w.Code)
+		}
+	}
+}
+
+func TestPositionJSON(t *testing.T) {
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	var req positionJSON
+	if err := json.Unmarshal([]byte(`{"lat":5,"lon":6,"accuracy":8.5,"speed":12.5,"course":270,"timestamp":"2026-01-02T03:04:05Z"}`), &req); err != nil {
+		t.Fatal(err)
+	}
+	p := req.position()
+	if p.Latitude != 5 || p.Longitude != 6 || p.Height != nil || p.Accuracy == nil || *p.Accuracy != 8.5 ||
+		p.Speed == nil || *p.Speed != 12.5 || p.Course == nil || *p.Course != 270 || !p.Timestamp.Equal(ts) {
+		t.Errorf("got %+v, want every field passed through", p)
+	}
+
+	before := time.Now()
+	p = (&positionJSON{Lat: 1, Lon: 2}).position()
+	if p.Timestamp.Before(before) || p.Timestamp.After(time.Now()) {
+		t.Errorf("timestamp = %s, want now", p.Timestamp)
 	}
 }
 

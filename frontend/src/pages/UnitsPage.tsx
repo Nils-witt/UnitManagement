@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react';
 import { Box, Button, TextField } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { useTranslation } from 'react-i18next';
-import type { Unit, UnitInput } from '../api/types';
+import type { Unit } from '../api/types';
 import ErrorBanner from '../components/ErrorBanner';
 import { useApi } from '../hooks/useApi';
 import { useConfirm } from '../hooks/useConfirm';
 import { useUnits } from '../hooks/useUnits';
 import { errorMessage } from '../lib/errors';
 import type { SortDirection } from '../lib/sort';
-import UnitDialog from './units-page/UnitDialog';
+import UnitDialog, { type UnitSubmission } from './units-page/UnitDialog';
 import UnitHistoryDialog from './units-page/UnitHistoryDialog';
 import UnitsListCard from './units-page/UnitsListCard';
 import { filterUnits, sortUnits, type UnitSortKey } from './units-page/unitSort';
@@ -57,13 +57,20 @@ export default function UnitsPage() {
     setHistoryOpen(true);
   };
 
-  const onSubmit = async (input: UnitInput) => {
-    if (editingUnit) {
-      await api.updateUnit(editingUnit.id, input);
-    } else {
-      await api.createUnit(input);
+  const onSubmit = async ({ unit, position }: UnitSubmission) => {
+    const saved = editingUnit
+      ? await api.updateUnit(editingUnit.id, unit)
+      : await api.createUnit(unit);
+    try {
+      if (position === null) {
+        await api.clearUnitPosition(saved.id);
+      } else if (position !== undefined) {
+        await api.setUnitPosition(saved.id, position);
+      }
+    } finally {
+      // The unit itself is saved even if its position failed.
+      await reloadUnits();
     }
-    await reloadUnits();
   };
 
   const onDelete = async (u: Unit) => {

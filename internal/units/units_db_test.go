@@ -2,6 +2,7 @@ package units
 
 import (
 	"crypto/rand"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -80,6 +81,41 @@ func TestPatchWithoutChangesWritesNothing(t *testing.T) {
 	}
 }
 
+func TestSetPosition(t *testing.T) {
+	s, user := newDBService(t)
+	ctx := t.Context()
+
+	ts := time.Now().UTC().Truncate(time.Second)
+	unit, err := s.Create(ctx, Input{Name: rand.Text()[:8] + "-position"}, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &Position{Latitude: 51, Longitude: 10, Timestamp: ts}
+	updated, err := s.SetPosition(ctx, unit.ID, p, user)
+	if err != nil || !updated.HasPosition() || *updated.Latitude != 51 {
+		t.Fatalf("set: unit = %+v, err = %v; want position 51/10", updated, err)
+	}
+
+	// Update leaves the position alone, even when its input has none.
+	updated, _, err = s.Update(ctx, unit.ID, Input{Name: unit.Name + "-renamed"}, user)
+	if err != nil || !updated.HasPosition() {
+		t.Fatalf("update: unit = %+v, err = %v; want the position kept", updated, err)
+	}
+
+	if _, err := s.SetPosition(ctx, unit.ID, &Position{Latitude: 91, Longitude: 0, Timestamp: ts}, user); !errors.Is(err, ErrInvalidPosition) {
+		t.Errorf("invalid: err = %v, want ErrInvalidPosition", err)
+	}
+
+	updated, err = s.SetPosition(ctx, unit.ID, nil, user)
+	if err != nil || updated.HasPosition() {
+		t.Fatalf("clear: unit = %+v, err = %v; want no position", updated, err)
+	}
+	history, err := s.History(ctx, unit.ID, 0, time.Time{}, time.Time{})
+	if err != nil || len(history) != 1 {
+		t.Fatalf("history = %+v, %v; want the one position set", history, err)
+	}
+}
+
 func TestDeleteHistoryBeforeKeepsNewest(t *testing.T) {
 	s, user := newDBService(t)
 	ctx := t.Context()
@@ -91,8 +127,8 @@ func TestDeleteHistoryBeforeKeepsNewest(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 1; i <= 2; i++ {
-		in.Position = &Position{Latitude: 1, Longitude: float64(1 + i), Timestamp: old.Add(time.Duration(i) * time.Hour)}
-		if _, _, err := s.Update(ctx, unit.ID, in, user); err != nil {
+		p := &Position{Latitude: 1, Longitude: float64(1 + i), Timestamp: old.Add(time.Duration(i) * time.Hour)}
+		if _, err := s.SetPosition(ctx, unit.ID, p, user); err != nil {
 			t.Fatal(err)
 		}
 	}

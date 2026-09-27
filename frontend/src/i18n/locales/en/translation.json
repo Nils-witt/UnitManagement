@@ -22,7 +22,8 @@
     "units": "Units",
     "map": "Map",
     "groups": "Groups",
-    "auditLog": "Audit log"
+    "auditLog": "Audit log",
+    "settings": "Settings"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -255,7 +256,8 @@
       "token.revoke": "API token revoked",
       "unit.create": "Unit created",
       "unit.update": "Unit changed",
-      "unit.delete": "Unit deleted"
+      "unit.delete": "Unit deleted",
+      "settings.update": "Settings changed"
     },
     "targetTypes": {
       "user": "User",
@@ -276,8 +278,16 @@
       "fields": {
         "name": "name",
         "symbol": "tactical symbol",
-        "tacticalName": "tactical name"
+        "tacticalName": "tactical name",
+        "mapStyleUrl": "map style"
       }
     }
+  },
+  "settings": {
+    "mapSection": "Map",
+    "mapStyleUrl": "Map style URL",
+    "mapStyleUrlHelp": "URL of a MapLibre style JSON, used by everyone. Its tiles, sprites and fonts must be served from the same host. Leave empty to use OpenStreetMap.",
+    "useDefault": "Use OpenStreetMap",
+    "saved": "Settings saved."
   }
 }

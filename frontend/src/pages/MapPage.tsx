@@ -24,6 +24,7 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import type { Position, PositionHistoryEntry, Unit } from '../api/types';
 import ErrorBanner from '../components/ErrorBanner';
 import { useApi } from '../hooks/useApi';
+import { useSettings } from '../hooks/useSettings';
 import { useUnitPositions } from '../hooks/useUnitPositions';
 import { useUnits } from '../hooks/useUnits';
 import { errorMessage } from '../lib/errors';
@@ -46,7 +47,7 @@ interface MenuState {
 }
 
 // OpenStreetMap's raster tiles, as a MapLibre style.
-const MAP_STYLE: StyleSpecification = {
+const OSM_STYLE: StyleSpecification = {
   version: 8,
   sources: {
     osm: {
@@ -60,6 +61,10 @@ const MAP_STYLE: StyleSpecification = {
   },
   layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
 };
+
+// During `npm run dev`, VITE_MAP_STYLE_URL (e.g. in frontend/.env.local)
+// overrides the map style set on the Settings page.
+const DEV_MAP_STYLE_URL = import.meta.env.DEV ? import.meta.env.VITE_MAP_STYLE_URL : undefined;
 
 // Shown until the units are loaded, and when none has a position.
 const DEFAULT_CENTER: [number, number] = [10.45, 51.16];
@@ -157,6 +162,11 @@ export default function MapPage() {
   const { t } = useTranslation();
   const api = useApi();
   const { units, loading, error: loadError, reloadUnits } = useUnits();
+  const { settings, loading: settingsLoading } = useSettings();
+  // An administrator's style, else OpenStreetMap (also if the settings fail
+  // to load).
+  const mapStyle: StyleSpecification | string =
+    DEV_MAP_STYLE_URL || settings.mapStyleUrl || OSM_STYLE;
   const pageRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<maplibregl.Map | null>(null);
@@ -175,10 +185,20 @@ export default function MapPage() {
 
   const placed = useMemo(() => units.filter((u): u is PlacedUnit => u.position !== null), [units]);
 
+  // The map is created once the settings are known, so it doesn't load
+  // OpenStreetMap first; later changes swap the style in place (below).
+  const latestStyle = useRef(mapStyle);
+  const appliedStyle = useRef(mapStyle);
   useEffect(() => {
+    latestStyle.current = mapStyle;
+  });
+
+  useEffect(() => {
+    if (settingsLoading) return;
+    appliedStyle.current = latestStyle.current;
     const m = new maplibregl.Map({
       container: containerRef.current!,
-      style: MAP_STYLE,
+      style: appliedStyle.current,
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
     });
@@ -193,7 +213,17 @@ export default function MapPage() {
       setMap(null);
       setStyleLoaded(false);
     };
-  }, []);
+  }, [settingsLoading]);
+
+  // A new style drops the track's layers; hiding the track until it has
+  // loaded remounts GpsTrack, which adds them again.
+  useEffect(() => {
+    if (!map || appliedStyle.current === mapStyle) return;
+    appliedStyle.current = mapStyle;
+    setStyleLoaded(false);
+    map.setStyle(mapStyle, { diff: false });
+    map.once('style.load', () => setStyleLoaded(true));
+  }, [map, mapStyle]);
 
   // Fits the view to the units once, after they are first loaded; later
   // updates leave the view alone so the map doesn't jump while in use.
@@ -533,10 +563,11 @@ function GpsTrack({ map, positions }: { map: maplibregl.Map; positions: Position
         'circle-stroke-width': 2,
       },
     });
+    // Gone already if the map style was replaced meanwhile.
     return () => {
-      map.removeLayer(TRACK_POINTS_LAYER);
-      map.removeLayer(`${TRACK_SOURCE}-line`);
-      map.removeSource(TRACK_SOURCE);
+      if (map.getLayer(TRACK_POINTS_LAYER)) map.removeLayer(TRACK_POINTS_LAYER);
+      if (map.getLayer(`${TRACK_SOURCE}-line`)) map.removeLayer(`${TRACK_SOURCE}-line`);
+      if (map.getSource(TRACK_SOURCE)) map.removeSource(TRACK_SOURCE);
     };
   }, [map]);
 

@@ -18,6 +18,7 @@ import (
 	"go-unit-mangement/internal/config"
 	"go-unit-mangement/internal/database"
 	"go-unit-mangement/internal/server"
+	"go-unit-mangement/internal/settings"
 	"go-unit-mangement/internal/units"
 	"go-unit-mangement/internal/version"
 )
@@ -103,7 +104,12 @@ func run() error {
 		go unitService.CleanupHistory(ctx, cfg.PositionHistoryRetention, time.Hour)
 	}
 
-	app := server.New(cfg, authService, oidcProvider, unitService, auditService)
+	settingsService, err := settings.NewService(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	app := server.New(cfg, authService, oidcProvider, unitService, auditService, settingsService)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           app.Handler(frontend.Dist()),

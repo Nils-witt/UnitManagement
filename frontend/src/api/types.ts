@@ -71,6 +71,12 @@ export interface InstanceInfo {
   name?: string;
 }
 
+/** Instance-wide settings (GET/PUT /api/settings); empty values mean the default. */
+export interface Settings {
+  /** MapLibre style JSON the map loads; empty uses OpenStreetMap. */
+  mapStyleUrl: string;
+}
+
 export interface VersionInfo {
   /** The release tag; absent for untagged builds. */
   version?: string;
@@ -180,6 +186,7 @@ export const AUDIT_ACTIONS = [
   'unit.create',
   'unit.update',
   'unit.delete',
+  'settings.update',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

@@ -12,6 +12,7 @@ import (
 	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/config"
+	"go-unit-mangement/internal/settings"
 	"go-unit-mangement/internal/units"
 )
 
@@ -22,6 +23,8 @@ type Server struct {
 	oidc  *auth.OIDCProvider
 	units *units.Service
 	audit *audit.Service
+	// settings are changed by administrators at runtime; the CSP follows them.
+	settings *settings.Service
 	// loginFailuresByIP and loginFailuresByUser throttle password guessing
 	// (see handleLogin).
 	loginFailuresByIP   *failureLimiter
@@ -33,9 +36,9 @@ type Server struct {
 	streams      sync.WaitGroup
 }
 
-func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service, auditService *audit.Service) *Server {
+func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service, auditService *audit.Service, settingsService *settings.Service) *Server {
 	return &Server{
-		cfg: cfg, auth: authService, oidc: oidc, units: unitService, audit: auditService,
+		cfg: cfg, auth: authService, oidc: oidc, units: unitService, audit: auditService, settings: settingsService,
 		loginFailuresByIP:   newFailureLimiter(loginFailuresPerIP, loginFailureWindow),
 		loginFailuresByUser: newFailureLimiter(loginFailuresPerUser, loginFailureWindow),
 		shutdown:            make(chan struct{}),
@@ -85,6 +88,8 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("DELETE /api/users/{id}/tokens/{tokenId}", admin(s.handleRevokeToken))
 	mux.Handle("GET /api/groups", admin(s.handleListGroups))
 	mux.Handle("GET /api/audit-log", admin(s.handleListAuditLog))
+	mux.Handle("GET /api/settings", authed(s.handleGetSettings))
+	mux.Handle("PUT /api/settings", admin(s.handleUpdateSettings))
 
 	mux.Handle("GET /api/units", authed(s.handleListUnits))
 	mux.Handle("GET /api/units/events", authed(s.handleUnitEvents))
@@ -106,27 +111,39 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 
 	mux.Handle("/", spaHandler(frontend))
 
-	return realIP(s.cfg.TrustedProxies, logRequests(securityHeaders(s.cors(mux))))
+	return realIP(s.cfg.TrustedProxies, logRequests(securityHeaders(s.mapOrigin, s.cors(mux))))
 }
+
+// mapOrigin is the origin of the configured map style, if any.
+func (s *Server) mapOrigin() string { return s.settings.Get().MapOrigin() }
 
 // contentSecurityPolicy allows what the single-page app loads: its own
 // scripts, the inline <style> tags MUI (Emotion) injects, the map's
 // OpenStreetMap tiles (see frontend/src/pages/MapPage.tsx) and MapLibre's
 // blob: workers. The WebSocket is same-origin, which 'self' covers.
-const contentSecurityPolicy = "default-src 'self'; " +
-	"script-src 'self'; " +
-	"style-src 'self' 'unsafe-inline'; " +
-	"img-src 'self' data: blob: https://tile.openstreetmap.org; " +
-	"connect-src 'self' https://tile.openstreetmap.org; " +
-	"worker-src blob:; " +
-	"font-src 'self' data:; " +
-	"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+// mapOrigin, unless empty, is where a configured map style (and the tiles,
+// sprites and fonts it references) is loaded from.
+func contentSecurityPolicy(mapOrigin string) string {
+	mapSources := "https://tile.openstreetmap.org"
+	if mapOrigin != "" {
+		mapSources += " " + mapOrigin
+	}
+	return "default-src 'self'; " +
+		"script-src 'self'; " +
+		"style-src 'self' 'unsafe-inline'; " +
+		"img-src 'self' data: blob: " + mapSources + "; " +
+		"connect-src 'self' " + mapSources + "; " +
+		"worker-src blob:; " +
+		"font-src 'self' data:; " +
+		"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+}
 
-// securityHeaders sets hardening headers on every response.
-func securityHeaders(next http.Handler) http.Handler {
+// securityHeaders sets hardening headers on every response; mapOrigin is
+// read per request, as administrators can change the map style at runtime.
+func securityHeaders(mapOrigin func() string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		h.Set("Content-Security-Policy", contentSecurityPolicy(mapOrigin()))
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")

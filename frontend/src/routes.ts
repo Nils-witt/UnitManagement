@@ -6,6 +6,7 @@ export const ROUTE_SEGMENTS = {
   users: 'users',
   groups: 'groups',
   auditLog: 'audit-log',
+  settings: 'settings',
   units: 'units',
   map: 'map',
 } as const;
@@ -16,6 +17,7 @@ export const ROUTES = {
   users: `/${ROUTE_SEGMENTS.users}`,
   groups: `/${ROUTE_SEGMENTS.groups}`,
   auditLog: `/${ROUTE_SEGMENTS.auditLog}`,
+  settings: `/${ROUTE_SEGMENTS.settings}`,
   units: `/${ROUTE_SEGMENTS.units}`,
   map: `/${ROUTE_SEGMENTS.map}`,
 } as const;

@@ -1,0 +1,13 @@
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  max-width: 800px;
+}
+
+.settings-page__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

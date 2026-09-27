@@ -32,6 +32,8 @@ tags:
     description: Units and their last known position.
   - name: audit
     description: The audit log of sign-ins and changes (administrators only).
+  - name: settings
+    description: Instance-wide settings, changed by administrators in the web UI.
   - name: system
     description: Build info and health.
 
@@ -409,6 +411,49 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Group"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/settings:
+    get:
+      tags: [settings]
+      summary: Get settings
+      operationId: getSettings
+      responses:
+        "200":
+          description: The current settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [settings]
+      summary: Update settings
+      description: >-
+        Administrators only. Replaces all settings; an empty value restores the
+        default. A change is recorded in the audit log as `settings.update`.
+      operationId: updateSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+      responses:
+        "200":
+          description: The settings as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1060,6 +1105,7 @@ components:
         - unit.create
         - unit.update
         - unit.delete
+        - settings.update
 
     AuditTargetType:
       type: string
@@ -1361,6 +1407,20 @@ components:
         version:
           type: string
           description: Release tag; present only for tagged builds.
+
+    Settings:
+      type: object
+      required: [mapStyleUrl]
+      properties:
+        mapStyleUrl:
+          type: string
+          maxLength: 2048
+          description: >-
+            Absolute http(s) URL of the MapLibre style JSON the map loads; empty
+            uses the built-in OpenStreetMap style. The Content-Security-Policy
+            allows the URL's origin, so the style's tiles, sprites and fonts
+            must be served from there too.
+          example: https://sgx.geodatenzentrum.de/gdz_basemapde_vektor/styles/bm_web_col.json
 
     Instance:
       type: object

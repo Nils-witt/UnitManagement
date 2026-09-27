@@ -6,6 +6,7 @@ export const queryKeys = {
   users: ['users', 'list'] as const,
   userTokens: (id: number) => ['users', 'tokens', id] as const,
   groups: ['groups', 'list'] as const,
+  settings: ['settings'] as const,
   auditLog: (action: string | null) => ['auditLog', action] as const,
   units: ['units', 'list'] as const,
   // Prefix of every history of the unit, whatever its timeframe.

@@ -18,6 +18,7 @@ import type {
   InstanceInfo,
   LoginResponse,
   PositionHistoryEntry,
+  Settings,
   Unit,
   UnitInput,
   UpdateUserInput,
@@ -188,6 +189,16 @@ export class ApiClient {
     if (query.limit) params.set('limit', String(query.limit));
     const qs = params.size > 0 ? `?${params}` : '';
     return this.getJson(`/api/audit-log${qs}`);
+  }
+
+  // ---- settings (changed by administrators only) ---------------------------
+
+  getSettings(): Promise<Settings> {
+    return this.getJson('/api/settings');
+  }
+
+  updateSettings(settings: Settings): Promise<Settings> {
+    return this.sendJsonForJson('/api/settings', 'PUT', settings);
   }
 
   // ---- units ---------------------------------------------------------------

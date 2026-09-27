@@ -22,7 +22,8 @@
     "units": "Einheiten",
     "map": "Karte",
     "groups": "Gruppen",
-    "auditLog": "Protokoll"
+    "auditLog": "Protokoll",
+    "settings": "Einstellungen"
   },
   "auth": {
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
@@ -255,7 +256,8 @@
       "token.revoke": "API-Token widerrufen",
       "unit.create": "Einheit angelegt",
       "unit.update": "Einheit geändert",
-      "unit.delete": "Einheit gelöscht"
+      "unit.delete": "Einheit gelöscht",
+      "settings.update": "Einstellungen geändert"
     },
     "targetTypes": {
       "user": "Benutzer",
@@ -276,8 +278,16 @@
       "fields": {
         "name": "Name",
         "symbol": "taktisches Zeichen",
-        "tacticalName": "taktischer Name"
+        "tacticalName": "taktischer Name",
+        "mapStyleUrl": "Kartenstil"
       }
     }
+  },
+  "settings": {
+    "mapSection": "Karte",
+    "mapStyleUrl": "URL des Kartenstils",
+    "mapStyleUrlHelp": "URL eines MapLibre-Style-JSON, gilt für alle Benutzer. Kacheln, Sprites und Schriften müssen vom selben Host kommen. Leer lassen, um OpenStreetMap zu verwenden.",
+    "useDefault": "OpenStreetMap verwenden",
+    "saved": "Einstellungen gespeichert."
   }
 }

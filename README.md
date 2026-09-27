@@ -57,6 +57,8 @@ See `.env.example`. Set `JWT_SECRET` to a random string of at least 32 bytes (e.
 
 Set `INSTANCE_NAME` to label the deployment (e.g. `Kreis Nord`); it replaces the product name in the page title, header and login page.
 
+The map shows OpenStreetMap by default. Administrators can switch it to any MapLibre style on the Settings page (e.g. basemap.de's `https://sgx.geodatenzentrum.de/gdz_basemapde_vektor/styles/bm_web_col.json`); it is stored in the database and applies to all users. The Content-Security-Policy then also allows the style URL's origin, so the style's tiles, sprites and fonts must come from that same origin. During `npm run dev`, `VITE_MAP_STYLE_URL` (e.g. in `frontend/.env.local`) overrides the setting.
+
 To let other web apps (such as [mapexplorer](https://github.com/Nils-witt/mapexplorer)) use the API from the browser, set `CORS_ALLOWED_ORIGINS` to their origins, comma-separated (e.g. `https://maps.example.com,http://localhost:5173`). The API then answers CORS requests from them; everyone else stays same-origin only. (The unit event WebSocket doesn't check the origin at all.) Write each origin as the browser sends it: scheme and host, a port only if it's not the default. Wildcards are rejected. Those apps authenticate with bearer tokens only (credentialed requests aren't allowed), typically OIDC access tokens from their own sign-in, so also configure `OIDC_ACCESS_TOKEN_AUDIENCE` (and `OIDC_ACCESS_TOKEN_ISSUERS` if their provider isn't the SSO provider above) to accept those tokens.
 
 Behind a reverse proxy, set `TRUSTED_PROXIES` to its addresses (comma-separated IPs or CIDRs, e.g. `10.0.0.0/8,::1`) so logs show the real client IP. For requests from those addresses the client is taken from `X-Forwarded-For` (the rightmost entry that isn't a trusted proxy) or `X-Real-IP`; the headers are ignored from anyone else, so they can't be spoofed. Password sign-in is throttled per client IP and per username: after 10 failures within 15 minutes, further attempts get `429 Too Many Requests` with a `Retry-After` header until the oldest failure is 15 minutes old, so set `TRUSTED_PROXIES` behind a proxy, or every client shares the proxy's budget.
@@ -84,6 +86,8 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | PUT    | `/api/users/{id}`  | `{isAdmin, password?}` (admin)       |
 | DELETE | `/api/users/{id}`  | Delete user (admin)                  |
 | GET    | `/api/groups`      | List groups with members (admin)     |
+| GET    | `/api/settings`    | `{mapStyleUrl}`: instance-wide settings |
+| PUT    | `/api/settings`    | `{mapStyleUrl}`; empty restores the default (admin) |
 | GET    | `/api/audit-log?limit=&before=&action=&actor=&targetType=&targetId=&since=&to=` | Audit log, newest first (admin) |
 | GET    | `/api/units`       | List units                           |
 | POST   | `/api/units`       | `{name, position?: {lat, lon, height?, accuracy?, speed?, course?, timestamp?}, symbol?, tacticalName?}` |

@@ -28,6 +28,8 @@ const (
 	ActionUnitCreate  Action = "unit.create"
 	ActionUnitUpdate  Action = "unit.update"
 	ActionUnitDelete  Action = "unit.delete"
+	// ActionSettingsUpdate has no target; Details names the changed fields.
+	ActionSettingsUpdate Action = "settings.update"
 )
 
 // Target types of entries.

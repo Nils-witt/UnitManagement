@@ -37,6 +37,7 @@ export default function BaseLayout() {
           { to: ROUTES.users, label: t('nav.users') },
           { to: ROUTES.groups, label: t('nav.groups') },
           { to: ROUTES.auditLog, label: t('nav.auditLog') },
+          { to: ROUTES.settings, label: t('nav.settings') },
         ]
       : []),
   ];

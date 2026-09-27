@@ -186,3 +186,11 @@ type AuditLog struct {
 	Details    map[string]any `gorm:"serializer:json;type:jsonb"`
 	RemoteAddr string         `gorm:"not null;default:''"`
 }
+
+// Setting is one instance-wide setting that administrators change in the web
+// UI, stored by key (see settings.Service).
+type Setting struct {
+	Key       string `gorm:"primaryKey"`
+	Value     string `gorm:"not null"`
+	UpdatedAt time.Time
+}

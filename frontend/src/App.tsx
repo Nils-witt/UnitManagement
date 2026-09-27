@@ -22,6 +22,7 @@ const HomePage = lazy(() => import('./pages/HomePage.tsx'));
 const UsersPage = lazy(() => import('./pages/UsersPage.tsx'));
 const GroupsPage = lazy(() => import('./pages/GroupsPage.tsx'));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage.tsx'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage.tsx'));
 const UnitsPage = lazy(() => import('./pages/UnitsPage.tsx'));
 const MapPage = lazy(() => import('./pages/MapPage.tsx'));
 
@@ -56,6 +57,7 @@ export default function App() {
                           <Route path={ROUTE_SEGMENTS.users} element={<UsersPage />} />
                           <Route path={ROUTE_SEGMENTS.groups} element={<GroupsPage />} />
                           <Route path={ROUTE_SEGMENTS.auditLog} element={<AuditLogPage />} />
+                          <Route path={ROUTE_SEGMENTS.settings} element={<SettingsPage />} />
                         </Route>
                         <Route path="*" element={<NotFoundPage />} />
                       </Route>

@@ -29,3 +29,18 @@ func TestLogRequestsAllowsWebSocketUpgrade(t *testing.T) {
 	}
 	_ = conn.CloseNow()
 }
+
+func TestSecurityHeaders(t *testing.T) {
+	t.Parallel()
+
+	h := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	for _, path := range []string{"/", "/api/health"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		for _, name := range []string{"Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy"} {
+			if rec.Header().Get(name) == "" {
+				t.Errorf("%s: header %s missing", path, name)
+			}
+		}
+	}
+}

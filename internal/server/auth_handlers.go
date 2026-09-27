@@ -4,6 +4,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"go-unit-mangement/internal/audit"
@@ -89,8 +91,22 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Checked before bcrypt, so a blocked guesser costs no hashing either.
+	ipKey := r.RemoteAddr
+	if addr, ok := parseIP(r.RemoteAddr); ok {
+		ipKey = addr.String()
+	}
+	userKey := truncate(strings.TrimSpace(req.Username), auth.MaxUsernameLength)
+	if wait := max(s.loginFailuresByIP.retryAfter(ipKey), s.loginFailuresByUser.retryAfter(userKey)); wait > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Round(time.Second).Seconds())))
+		writeError(w, http.StatusTooManyRequests, "too many failed sign-ins, try again later")
+		return
+	}
+
 	token, user, expires, err := s.auth.Login(r.Context(), req.Username, req.Password)
 	if errors.Is(err, auth.ErrInvalidCredentials) {
+		s.loginFailuresByIP.fail(ipKey)
+		s.loginFailuresByUser.fail(userKey)
 		s.record(r, audit.Entry{Action: audit.ActionLoginFailed, ActorName: truncate(req.Username, auth.MaxUsernameLength), Details: map[string]any{"method": "password"}})
 		writeError(w, http.StatusUnauthorized, err.Error())
 		return
@@ -100,6 +116,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	s.loginFailuresByUser.reset(userKey)
 	s.record(r, audit.Entry{Action: audit.ActionLogin, Actor: user, Details: map[string]any{"method": "password"}})
 
 	writeJSON(w, http.StatusOK, tokenResponse{
@@ -114,12 +131,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 // always succeeds: the client discards the token either way.
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if token := auth.TokenFromRequest(r); token != "" {
-		// Looked up first, as the session is gone afterwards; an invalid
-		// token has nothing to log out of and nothing to record.
-		user, userErr := s.auth.UserForToken(r.Context(), token)
-		if err := s.auth.Logout(r.Context(), token); err != nil {
+		// A token without a session (invalid, expired, or an OIDC access
+		// token) has nothing to log out of and nothing to record.
+		user, err := s.auth.Logout(r.Context(), token)
+		if err != nil {
 			slog.Error("logout", "err", err)
-		} else if userErr == nil {
+		} else if user != nil {
 			s.record(r, audit.Entry{Action: audit.ActionLogout, Actor: user})
 		}
 	}

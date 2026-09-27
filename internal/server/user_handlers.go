@@ -243,7 +243,8 @@ func writeUserError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, auth.ErrUsernameTaken):
 		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, auth.ErrInvalidUsername), errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrInvalidTokenTTL), errors.Is(err, auth.ErrInvalidTokenName):
+	case errors.Is(err, auth.ErrInvalidUsername), errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong),
+		errors.Is(err, auth.ErrInvalidTokenTTL), errors.Is(err, auth.ErrInvalidTokenName):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		slog.Error("user management", "err", err)

@@ -220,14 +220,29 @@ func (s *Service) createSession(ctx context.Context, session models.Session, ttl
 	return &newSession{Session: session, token: token}, nil
 }
 
-// Logout ends the session of an access token. A token that is invalid or
-// already expired has no session to end, so that is not an error.
-func (s *Service) Logout(ctx context.Context, token string) error {
+// Logout ends the session of an access token and returns the user it
+// belonged to. A token without a session to end — invalid, expired, or an
+// OIDC access token, which never has one — returns a nil user, not an error.
+func (s *Service) Logout(ctx context.Context, token string) (*models.User, error) {
 	sessionID, _, err := s.tokens.verify(token)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	return s.db.WithContext(ctx).Where("token_hash = ?", hashToken(sessionID)).Delete(&models.Session{}).Error
+	var session models.Session
+	res := s.db.WithContext(ctx).Clauses(clause.Returning{}).
+		Where("token_hash = ? AND expires_at > ?", hashToken(sessionID), time.Now()).
+		Delete(&session)
+	if res.Error != nil {
+		return nil, fmt.Errorf("delete session: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return nil, nil
+	}
+	user, err := s.GetUser(ctx, session.UserID)
+	if errors.Is(err, ErrUserNotFound) {
+		return nil, nil
+	}
+	return user, err
 }
 
 // UserForToken verifies an access token and resolves its session to the

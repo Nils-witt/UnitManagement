@@ -98,7 +98,12 @@ func run() error {
 		go auditService.Cleanup(ctx, cfg.AuditLogRetention, time.Hour)
 	}
 
-	app := server.New(cfg, authService, oidcProvider, units.NewService(db), auditService)
+	unitService := units.NewService(db)
+	if cfg.PositionHistoryRetention > 0 {
+		go unitService.CleanupHistory(ctx, cfg.PositionHistoryRetention, time.Hour)
+	}
+
+	app := server.New(cfg, authService, oidcProvider, unitService, auditService)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           app.Handler(frontend.Dist()),

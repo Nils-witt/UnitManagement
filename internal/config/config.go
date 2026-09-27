@@ -38,6 +38,9 @@ type Config struct {
 	// AuditLogRetention is how long audit log entries are kept; zero keeps
 	// them forever.
 	AuditLogRetention time.Duration
+	// PositionHistoryRetention is how long unit position history entries are
+	// kept; zero keeps them forever. Each unit's newest entry is always kept.
+	PositionHistoryRetention time.Duration
 
 	// OIDC enables SSO login when set (see OIDCEnabled).
 	OIDC auth.OIDCConfig
@@ -61,9 +64,20 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("JWT_SECRET must be at least %d bytes long", auth.MinJWTSecretLength)
 	}
 
-	retention, err := time.ParseDuration(getEnv("AUDIT_LOG_RETENTION", "0"))
-	if err != nil || retention < 0 {
-		return nil, fmt.Errorf("invalid AUDIT_LOG_RETENTION: must be a non-negative duration such as 2160h")
+	retention, err := parseRetention("AUDIT_LOG_RETENTION")
+	if err != nil {
+		return nil, err
+	}
+	historyRetention, err := parseRetention("POSITION_HISTORY_RETENTION")
+	if err != nil {
+		return nil, err
+	}
+
+	// bcrypt can't hash longer passwords. The bootstrap admin skips the
+	// password policy, so this is the only place to catch it.
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if len(adminPassword) > auth.MaxPasswordBytes {
+		return nil, fmt.Errorf("ADMIN_PASSWORD must be at most %d bytes long", auth.MaxPasswordBytes)
 	}
 
 	proxies, err := parsePrefixes(os.Getenv("TRUSTED_PROXIES"))
@@ -72,16 +86,17 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		Addr:              getEnv("ADDR", ":8080"),
-		DatabaseURL:       getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
-		SessionTTL:        ttl,
-		JWTSecret:         jwtSecret,
-		CookieSecure:      secure,
-		InstanceName:      strings.TrimSpace(os.Getenv("INSTANCE_NAME")),
-		TrustedProxies:    proxies,
-		AuditLogRetention: retention,
-		AdminUsername:     getEnv("ADMIN_USERNAME", "admin"),
-		AdminPassword:     os.Getenv("ADMIN_PASSWORD"),
+		Addr:                     getEnv("ADDR", ":8080"),
+		DatabaseURL:              getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
+		SessionTTL:               ttl,
+		JWTSecret:                jwtSecret,
+		CookieSecure:             secure,
+		InstanceName:             strings.TrimSpace(os.Getenv("INSTANCE_NAME")),
+		TrustedProxies:           proxies,
+		AuditLogRetention:        retention,
+		PositionHistoryRetention: historyRetention,
+		AdminUsername:            getEnv("ADMIN_USERNAME", "admin"),
+		AdminPassword:            adminPassword,
 		OIDC: auth.OIDCConfig{
 			IssuerURL:    os.Getenv("OIDC_ISSUER_URL"),
 			ClientID:     os.Getenv("OIDC_CLIENT_ID"),
@@ -171,6 +186,16 @@ func parsePrefixes(list string) ([]netip.Prefix, error) {
 		prefixes = append(prefixes, prefix.Masked())
 	}
 	return prefixes, nil
+}
+
+// parseRetention reads the environment variable key as a non-negative
+// duration, zero when unset.
+func parseRetention(key string) (time.Duration, error) {
+	d, err := time.ParseDuration(getEnv(key, "0"))
+	if err != nil || d < 0 {
+		return 0, fmt.Errorf("invalid %s: must be a non-negative duration such as 2160h", key)
+	}
+	return d, nil
 }
 
 func getEnv(key, fallback string) string {

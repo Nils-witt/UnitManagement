@@ -119,3 +119,73 @@ func TestCreateToken(t *testing.T) {
 		t.Fatalf("after password change: err = %v, want ErrInvalidSession", err)
 	}
 }
+
+func TestValidatePassword(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		password string
+		want     error
+	}{
+		{"too short", "short", ErrPasswordTooShort},
+		{"minimum", strings.Repeat("x", MinPasswordLength), nil},
+		{"bcrypt limit", strings.Repeat("x", MaxPasswordBytes), nil},
+		{"over bcrypt limit", strings.Repeat("x", MaxPasswordBytes+1), ErrPasswordTooLong},
+		// 25 three-byte runes: few characters, but 75 bytes.
+		{"multibyte over limit", strings.Repeat("€", 25), ErrPasswordTooLong},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if err := validatePassword(tt.password); !errors.Is(err, tt.want) {
+				t.Errorf("validatePassword() = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestLogout needs a scratch PostgreSQL database in TEST_DATABASE_URL (see
+// TestSyncOIDCGroups).
+func TestLogout(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	db, err := database.Connect(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewService(db, time.Hour, []byte(strings.Repeat("k", MinJWTSecretLength)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+
+	user, err := s.CreateUser(ctx, rand.Text()[:8]+"-logout", "password123", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, _, err := s.Login(ctx, user.Username, "password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Logout(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.ID != user.ID {
+		t.Fatalf("Logout returned %+v, want user %d", got, user.ID)
+	}
+	if _, err := s.UserForToken(ctx, token); !errors.Is(err, ErrInvalidSession) {
+		t.Errorf("token after logout: err = %v, want ErrInvalidSession", err)
+	}
+
+	// Nothing left to end, and garbage never had a session.
+	for _, tok := range []string{token, "not-a-jwt"} {
+		if got, err := s.Logout(ctx, tok); got != nil || err != nil {
+			t.Errorf("Logout(%.10q) = %v, %v; want nil, nil", tok, got, err)
+		}
+	}
+}

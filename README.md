@@ -13,7 +13,7 @@ On startup, if no account is an administrator (on first start, or after SSO grou
 
 ## Users and SSO
 
-Administrators manage accounts on the **Users** page: create local accounts (passwords of at least 8 characters), grant or revoke the administrator role, reset passwords and delete accounts. Resetting a password or deleting an account ends that user's sessions. Administrators can't remove their own role or delete their own account.
+Administrators manage accounts on the **Users** page: create local accounts (passwords of 8 characters up to 72 bytes, bcrypt's limit), grant or revoke the administrator role, reset passwords and delete accounts. Resetting a password or deleting an account ends that user's sessions. Administrators can't remove their own role or delete their own account.
 
 SSO uses OpenID Connect (authorization code flow with PKCE) and works with any compliant provider (Keycloak, Authentik, Entra ID, Google, Dex, …). Set `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` and `OIDC_REDIRECT_URL`, and register the redirect URL (`https://<host>/api/auth/oidc/callback`) at the provider. The login page then shows a "Sign in with `OIDC_DISPLAY_NAME`" button.
 
@@ -57,7 +57,9 @@ See `.env.example`. Set `JWT_SECRET` to a random string of at least 32 bytes (e.
 
 Set `INSTANCE_NAME` to label the deployment (e.g. `Kreis Nord`); it replaces the product name in the page title, header and login page.
 
-Behind a reverse proxy, set `TRUSTED_PROXIES` to its addresses (comma-separated IPs or CIDRs, e.g. `10.0.0.0/8,::1`) so logs show the real client IP. For requests from those addresses the client is taken from `X-Forwarded-For` (the rightmost entry that isn't a trusted proxy) or `X-Real-IP`; the headers are ignored from anyone else, so they can't be spoofed.
+Behind a reverse proxy, set `TRUSTED_PROXIES` to its addresses (comma-separated IPs or CIDRs, e.g. `10.0.0.0/8,::1`) so logs show the real client IP. For requests from those addresses the client is taken from `X-Forwarded-For` (the rightmost entry that isn't a trusted proxy) or `X-Real-IP`; the headers are ignored from anyone else, so they can't be spoofed. Password sign-in is throttled per client IP and per username: after 10 failures within 15 minutes, further attempts get `429 Too Many Requests` with a `Retry-After` header until the oldest failure is 15 minutes old, so set `TRUSTED_PROXIES` behind a proxy, or every client shares the proxy's budget.
+
+The unit position history is kept forever unless `POSITION_HISTORY_RETENTION` is set to a duration (e.g. `720h` for 30 days); older positions are then deleted hourly, except each unit's newest one.
 
 ### Audit log
 
@@ -87,7 +89,7 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | GET    | `/api/units/{id}`  | Get unit by UUID                     |
 | GET    | `/api/units/{id}/positions?limit=&since=&to=` | Position history, newest first; `since` and `to` (RFC 3339) limit it to measurements in that timeframe |
 | PUT    | `/api/units/{id}`  | Same body as POST; a missing position clears it |
-| PATCH  | `/api/units/{id}`  | Changes only the fields sent; null clears |
+| PATCH  | `/api/units/{id}`  | Changes only the fields sent; null clears. A PUT or PATCH that changes nothing leaves `updatedAt` alone and sends no event |
 | DELETE | `/api/units/{id}`  | Delete unit                          |
 | GET    | `/api/version`     | `{commit, version?}`: build info     |
 | GET    | `/api/instance`    | `{name?}`: instance name             |

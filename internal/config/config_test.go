@@ -2,7 +2,9 @@ package config
 
 import (
 	"slices"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadOIDCAccessTokens(t *testing.T) {
@@ -44,6 +46,42 @@ func TestLoadOIDCAccessTokens(t *testing.T) {
 			}
 			if err == nil && !slices.Equal(cfg.OIDC.AccessTokenAudiences, tc.wantAudiences) {
 				t.Errorf("audiences = %q, want %q", cfg.OIDC.AccessTokenAudiences, tc.wantAudiences)
+			}
+		})
+	}
+}
+
+func TestLoadAdminPasswordLength(t *testing.T) {
+	t.Setenv("ADMIN_PASSWORD", strings.Repeat("x", 72))
+	if _, err := Load(); err != nil {
+		t.Fatalf("72 bytes: err = %v, want nil", err)
+	}
+	t.Setenv("ADMIN_PASSWORD", strings.Repeat("x", 73))
+	if _, err := Load(); err == nil {
+		t.Fatal("73 bytes: err = nil, want error")
+	}
+}
+
+func TestLoadPositionHistoryRetention(t *testing.T) {
+	tests := []struct {
+		value   string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", 0, false},
+		{"720h", 720 * time.Hour, false},
+		{"-1h", 0, true},
+		{"soon", 0, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Setenv("POSITION_HISTORY_RETENTION", tc.value)
+			cfg, err := Load()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, want error %t", err, tc.wantErr)
+			}
+			if err == nil && cfg.PositionHistoryRetention != tc.want {
+				t.Errorf("retention = %s, want %s", cfg.PositionHistoryRetention, tc.want)
 			}
 		})
 	}

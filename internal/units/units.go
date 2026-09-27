@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"regexp"
 	"strings"
@@ -128,7 +129,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models
 
 // Patch updates the unit like Update, with the input patch makes of the
 // unit's current fields. It runs under the row lock, so concurrent patches of
-// different fields don't overwrite each other.
+// different fields don't overwrite each other. A patch that changes nothing
+// writes nothing: the unit keeps its updated_at and updated_by, and no event
+// is published.
 func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), by *models.User) (*models.Unit, []Field, error) {
 	var changed []Field
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -148,6 +151,11 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 			return err
 		}
 		changed = Changed(&before, &unit)
+		// Nothing to write: leave updated_at and updated_by alone and don't
+		// wake up every event stream.
+		if len(changed) == 0 {
+			return nil
+		}
 		unit.UpdatedByID = &by.ID
 		// Select("*") so a cleared position is written as NULLs too.
 		res := tx.Model(&unit).
@@ -171,7 +179,9 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 	if err != nil {
 		return nil, nil, err
 	}
-	s.events.Publish(Event{Type: EventUpdated, ID: id, Unit: updated})
+	if len(changed) > 0 {
+		s.events.Publish(Event{Type: EventUpdated, ID: id, Unit: updated})
+	}
 	return updated, changed, nil
 }
 
@@ -248,6 +258,43 @@ func (s *Service) History(ctx context.Context, id uuid.UUID, limit int, since, t
 		return nil, fmt.Errorf("get position history of unit %s: %w", id, err)
 	}
 	return history, nil
+}
+
+// CleanupHistory periodically deletes position history entries measured
+// more than retention ago until ctx is done. Each unit's newest entry is
+// kept, so its current position stays in its history.
+func (s *Service) CleanupHistory(ctx context.Context, retention, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			deleted, err := s.deleteHistoryBefore(ctx, time.Now().Add(-retention))
+			if err != nil {
+				slog.Error("cleanup position history", "err", err)
+			} else if deleted > 0 {
+				slog.Info("cleaned up position history", "deleted", deleted)
+			}
+		}
+	}
+}
+
+// deleteHistoryBefore deletes the position history entries measured before
+// cutoff, except each unit's newest one, and returns how many it deleted.
+func (s *Service) deleteHistoryBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	res := s.db.WithContext(ctx).Exec(`
+		DELETE FROM unit_positions
+		WHERE timestamp < ?
+			AND id NOT IN (
+				SELECT DISTINCT ON (unit_id) id FROM unit_positions
+				ORDER BY unit_id, timestamp DESC, id DESC
+			)`, cutoff)
+	if res.Error != nil {
+		return 0, fmt.Errorf("delete position history: %w", res.Error)
+	}
+	return res.RowsAffected, nil
 }
 
 // recordPosition appends the unit's current position, if it has one, to its

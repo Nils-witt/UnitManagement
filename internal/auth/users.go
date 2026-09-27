@@ -15,6 +15,8 @@ import (
 
 const (
 	MinPasswordLength = 8
+	// MaxPasswordBytes is bcrypt's input limit; longer passwords can't be hashed.
+	MaxPasswordBytes  = 72
 	MaxUsernameLength = 64
 )
 
@@ -23,6 +25,7 @@ var (
 	ErrUsernameTaken    = errors.New("username is already taken")
 	ErrInvalidUsername  = fmt.Errorf("username must be 1 to %d characters", MaxUsernameLength)
 	ErrPasswordTooShort = fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	ErrPasswordTooLong  = fmt.Errorf("password must be at most %d bytes", MaxPasswordBytes)
 )
 
 // byName orders preloaded groups.
@@ -141,6 +144,9 @@ func normalizeUsername(username string) (string, error) {
 func validatePassword(password string) error {
 	if utf8.RuneCountInString(password) < MinPasswordLength {
 		return ErrPasswordTooShort
+	}
+	if len(password) > MaxPasswordBytes {
+		return ErrPasswordTooLong
 	}
 	return nil
 }

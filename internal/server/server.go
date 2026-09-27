@@ -22,6 +22,10 @@ type Server struct {
 	oidc  *auth.OIDCProvider
 	units *units.Service
 	audit *audit.Service
+	// loginFailuresByIP and loginFailuresByUser throttle password guessing
+	// (see handleLogin).
+	loginFailuresByIP   *failureLimiter
+	loginFailuresByUser *failureLimiter
 	// shutdown is closed by CloseStreams to end long-lived connections;
 	// streams tracks the ones still open.
 	shutdown     chan struct{}
@@ -30,7 +34,12 @@ type Server struct {
 }
 
 func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service, auditService *audit.Service) *Server {
-	return &Server{cfg: cfg, auth: authService, oidc: oidc, units: unitService, audit: auditService, shutdown: make(chan struct{})}
+	return &Server{
+		cfg: cfg, auth: authService, oidc: oidc, units: unitService, audit: auditService,
+		loginFailuresByIP:   newFailureLimiter(loginFailuresPerIP, loginFailureWindow),
+		loginFailuresByUser: newFailureLimiter(loginFailuresPerUser, loginFailureWindow),
+		shutdown:            make(chan struct{}),
+	}
 }
 
 // CloseStreams ends every open event stream and waits until they are closed
@@ -97,7 +106,32 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 
 	mux.Handle("/", spaHandler(frontend))
 
-	return realIP(s.cfg.TrustedProxies, logRequests(mux))
+	return realIP(s.cfg.TrustedProxies, logRequests(securityHeaders(mux)))
+}
+
+// contentSecurityPolicy allows what the single-page app loads: its own
+// scripts, the inline <style> tags MUI (Emotion) injects, the map's
+// OpenStreetMap tiles (see frontend/src/pages/MapPage.tsx) and MapLibre's
+// blob: workers. The WebSocket is same-origin, which 'self' covers.
+const contentSecurityPolicy = "default-src 'self'; " +
+	"script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data: blob: https://tile.openstreetmap.org; " +
+	"connect-src 'self' https://tile.openstreetmap.org; " +
+	"worker-src blob:; " +
+	"font-src 'self' data:; " +
+	"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+// securityHeaders sets hardening headers on every response.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // decodeJSON decodes a JSON request body of at most 1 MiB into v, writing a
@@ -141,6 +175,12 @@ func logRequests(next http.Handler) http.Handler {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		slog.Info("request", "method", r.Method, "path", r.URL.Path, "status", rec.status, "remote", r.RemoteAddr, "duration", time.Since(start))
+		// Health checks come from probes every few seconds; they would drown
+		// out everything else.
+		level := slog.LevelInfo
+		if r.URL.Path == "/api/health" {
+			level = slog.LevelDebug
+		}
+		slog.Log(r.Context(), level, "request", "method", r.Method, "path", r.URL.Path, "status", rec.status, "remote", r.RemoteAddr, "duration", time.Since(start))
 	})
 }

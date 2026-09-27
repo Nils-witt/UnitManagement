@@ -133,8 +133,10 @@ func (s *Server) mapOrigin() string { return s.settings.Get().MapOrigin() }
 
 // contentSecurityPolicy allows what the single-page app loads: its own
 // scripts, the inline <style> tags MUI (Emotion) injects, the map's
-// OpenStreetMap tiles (see frontend/src/pages/MapPage.tsx) and MapLibre's
-// blob: workers. The WebSocket is same-origin, which 'self' covers.
+// OpenStreetMap tiles and MapLibre's worker, which is served from assets/
+// (see setWorkerUrl in frontend/src/pages/MapPage.tsx); blob: stays allowed
+// for MapLibre's default blob workers. The WebSocket is same-origin, which
+// 'self' covers.
 // mapOrigin, unless empty, is where a configured map style (and the tiles,
 // sprites and fonts it references) is loaded from.
 func contentSecurityPolicy(mapOrigin string) string {
@@ -147,7 +149,7 @@ func contentSecurityPolicy(mapOrigin string) string {
 		"style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: blob: " + mapSources + "; " +
 		"connect-src 'self' " + mapSources + "; " +
-		"worker-src blob:; " +
+		"worker-src 'self' blob:; " +
 		"font-src 'self' data:; " +
 		"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 }

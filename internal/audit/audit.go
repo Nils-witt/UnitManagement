@@ -25,18 +25,29 @@ const (
 	ActionUserDelete  Action = "user.delete"
 	ActionTokenCreate Action = "token.create"
 	ActionTokenRevoke Action = "token.revoke"
-	ActionUnitCreate  Action = "unit.create"
-	ActionUnitUpdate  Action = "unit.update"
-	ActionUnitDelete  Action = "unit.delete"
+	// ActionAPIKeyCreate and ActionAPIKeyDelete target the API key; Details
+	// names the user it acts as.
+	ActionAPIKeyCreate Action = "api_key.create"
+	ActionAPIKeyDelete Action = "api_key.delete"
+	// ActionSyncRemote* target the sync remote.
+	ActionSyncRemoteCreate  Action = "sync_remote.create"
+	ActionSyncRemoteUpdate  Action = "sync_remote.update"
+	ActionSyncRemoteDelete  Action = "sync_remote.delete"
+	ActionSyncRemoteTrigger Action = "sync_remote.trigger"
+	ActionUnitCreate        Action = "unit.create"
+	ActionUnitUpdate        Action = "unit.update"
+	ActionUnitDelete        Action = "unit.delete"
 	// ActionSettingsUpdate has no target; Details names the changed fields.
 	ActionSettingsUpdate Action = "settings.update"
 )
 
 // Target types of entries.
 const (
-	TargetUser  = "user"
-	TargetToken = "token"
-	TargetUnit  = "unit"
+	TargetUser       = "user"
+	TargetToken      = "token"
+	TargetUnit       = "unit"
+	TargetAPIKey     = "api_key"
+	TargetSyncRemote = "sync_remote"
 )
 
 const (

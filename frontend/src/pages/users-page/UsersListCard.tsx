@@ -23,6 +23,7 @@ export default function UsersListCard({
   onSort,
   onEdit,
   onCreateToken,
+  onApiKeys,
   onDelete,
 }: {
   users: User[];
@@ -33,6 +34,7 @@ export default function UsersListCard({
   onSort: (key: UserSortKey) => void;
   onEdit: (u: User) => void;
   onCreateToken: (u: User) => void;
+  onApiKeys: (u: User) => void;
   onDelete: (u: User) => void;
 }) {
   const { t } = useTranslation();
@@ -70,6 +72,7 @@ export default function UsersListCard({
               self={u.id === currentUserId}
               onEdit={() => onEdit(u)}
               onCreateToken={() => onCreateToken(u)}
+              onApiKeys={() => onApiKeys(u)}
               onDelete={() => onDelete(u)}
             />
           ))}

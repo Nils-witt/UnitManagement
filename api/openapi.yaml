@@ -16,6 +16,12 @@ info:
     audiences in `aud`; ID tokens and opaque tokens are rejected. Its `sub`
     resolves to the linked account, which is created on first use.
 
+    An RS256 JWT whose `kid` header names a registered API key
+    (`POST /api/users/{id}/api-keys`) is accepted too and acts as that key's
+    user. It must be signed with the key's private half, carry `iat` and
+    `exp` no more than an hour apart, and be unexpired. Other instances
+    syncing units from this one authenticate this way (see the `sync` tag).
+
     Errors are returned as `{"error": "<message>"}`.
     Request bodies are limited to 1 MiB.
   version: 1.0.0
@@ -34,6 +40,11 @@ tags:
     description: The audit log of sign-ins and changes (administrators only).
   - name: settings
     description: Instance-wide settings, changed by administrators in the web UI.
+  - name: sync
+    description: >-
+      Mirroring the units of other instances (administrators only). This
+      instance signs its requests to them with its own key pair; each remote
+      registers the public key as an API key under this instance's server UUID.
   - name: system
     description: Build info and health.
 
@@ -394,6 +405,101 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/users/{id}/api-keys:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [users]
+      summary: List a user's API keys
+      description: Newest first.
+      operationId: listUserApiKeys
+      responses:
+        "200":
+          description: The user's API keys.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiKey"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [users]
+      summary: Register an API key for a user
+      description: |
+        Registers a public key under a caller-chosen ID. Whoever holds the
+        private key can then act as the user by signing short-lived RS256
+        JWTs with `kid` set to the ID (see the API description). To let
+        another instance sync units from this one, use its server UUID and
+        public key from its `GET /api/sync/identity`.
+      operationId: createUserApiKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "201":
+          description: The key was registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "409":
+          description: An API key with this ID already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/users/{id}/api-keys/{keyId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+      - name: keyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [users]
+      summary: Delete an API key
+      description: JWTs signed with it stop working immediately.
+      operationId: deleteUserApiKey
+      responses:
+        "204":
+          description: The key was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No such API key for this user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/groups:
     get:
       tags: [groups]
@@ -460,6 +566,191 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  /api/sync/identity:
+    get:
+      tags: [sync]
+      summary: Get this instance's sync identity
+      description: >-
+        The server UUID and public key another instance registers as an API
+        key to let this one sync from it. Both are generated on first start
+        and stored in `KEYS_DIR`.
+      operationId: getSyncIdentity
+      responses:
+        "200":
+          description: This instance's identity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncIdentity"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/sync/remotes:
+    get:
+      tags: [sync]
+      summary: List sync remotes
+      description: Sorted by name.
+      operationId: listSyncRemotes
+      responses:
+        "200":
+          description: All sync remotes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SyncRemote"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [sync]
+      summary: Add a sync remote
+      description: An enabled remote starts syncing right away.
+      operationId: createSyncRemote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRemoteRequest"
+      responses:
+        "201":
+          description: The remote was added.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncRemote"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/sync/remotes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/SyncRemoteId"
+    get:
+      tags: [sync]
+      summary: Get a sync remote
+      operationId: getSyncRemote
+      responses:
+        "200":
+          description: The remote.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncRemote"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SyncRemoteNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [sync]
+      summary: Update a sync remote
+      description: >-
+        Its worker restarts when the URL or interval changes, and stops or
+        starts with `enabled`.
+      operationId: updateSyncRemote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRemoteRequest"
+      responses:
+        "200":
+          description: The updated remote.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncRemote"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SyncRemoteNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [sync]
+      summary: Delete a sync remote
+      description: Stops syncing; the units mirrored from it stay as ordinary local units.
+      operationId: deleteSyncRemote
+      responses:
+        "204":
+          description: The remote was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SyncRemoteNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/sync/remotes/{id}/trigger:
+    parameters:
+      - $ref: "#/components/parameters/SyncRemoteId"
+    post:
+      tags: [sync]
+      summary: Start a full sync now
+      operationId: triggerSyncRemote
+      responses:
+        "202":
+          description: A full sync was queued.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SyncRemoteNotFound"
+        "409":
+          description: The remote is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/sync/remotes/{id}/logs:
+    parameters:
+      - $ref: "#/components/parameters/SyncRemoteId"
+    get:
+      tags: [sync]
+      summary: Get a sync remote's recent activity
+      description: Oldest first, at most 200 entries; kept in memory only, so empty after a restart.
+      operationId: listSyncRemoteLogs
+      responses:
+        "200":
+          description: Recent log entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SyncLogEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SyncRemoteNotFound"
 
   /api/audit-log:
     get:
@@ -700,6 +991,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/UnitNotFound"
+        "409":
+          $ref: "#/components/responses/UnitSynced"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -833,6 +1126,14 @@ components:
       schema:
         type: string
         format: uuid
+    SyncRemoteId:
+      name: id
+      in: path
+      required: true
+      description: Sync remote UUID. A malformed ID is answered with 404.
+      schema:
+        type: string
+        format: uuid
 
   responses:
     BadRequest:
@@ -889,13 +1190,31 @@ components:
           example:
             error: unit not found
     UnitNameTaken:
-      description: Another unit already has this name.
+      description: >-
+        Another unit already has this name, or the unit is synced from another
+        instance and can only be changed there.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
           example:
             error: unit name is already taken
+    UnitSynced:
+      description: The unit is synced from another instance and can only be changed there.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: unit is synced from another instance and can only be changed there
+    SyncRemoteNotFound:
+      description: No such sync remote.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: sync remote not found
     InternalError:
       description: Unexpected server error.
       content:
@@ -1102,6 +1421,12 @@ components:
         - user.delete
         - token.create
         - token.revoke
+        - api_key.create
+        - api_key.delete
+        - sync_remote.create
+        - sync_remote.update
+        - sync_remote.delete
+        - sync_remote.trigger
         - unit.create
         - unit.update
         - unit.delete
@@ -1109,7 +1434,7 @@ components:
 
     AuditTargetType:
       type: string
-      enum: [user, token, unit]
+      enum: [user, token, unit, api_key, sync_remote]
 
     AuditLogEntry:
       type: object
@@ -1346,6 +1671,7 @@ components:
           updatedAt,
           createdBy,
           updatedBy,
+          syncedFrom,
         ]
       properties:
         id:
@@ -1377,10 +1703,138 @@ components:
             - $ref: "#/components/schemas/UserRef"
             - type: "null"
         updatedBy:
-          description: Null once that user has been deleted.
+          description: Null once that user has been deleted, and for units synced from another instance.
           oneOf:
             - $ref: "#/components/schemas/UserRef"
             - type: "null"
+        syncedFrom:
+          description: >-
+            The sync remote the unit is mirrored from, where alone it can be
+            changed; null for local units.
+          oneOf:
+            - $ref: "#/components/schemas/SyncRemoteRef"
+            - type: "null"
+
+    SyncRemoteRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    ApiKey:
+      type: object
+      required: [id, name, publicKeyPem, createdAt, lastUsedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The `kid` JWTs signed with this key carry.
+        name:
+          type: string
+        publicKeyPem:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          description: Null until first used; updated at most once a minute.
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+
+    CreateApiKeyRequest:
+      type: object
+      required: [id, name, publicKeyPem]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: For another instance, its server UUID.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        publicKeyPem:
+          type: string
+          description: PEM-encoded PKIX RSA public key of at least 2048 bits.
+
+    SyncIdentity:
+      type: object
+      required: [serverUuid, publicKeyPem]
+      properties:
+        serverUuid:
+          type: string
+          format: uuid
+        publicKeyPem:
+          type: string
+
+    SyncRemoteRequest:
+      type: object
+      required: [name, baseUrl, pollIntervalSec, enabled]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        baseUrl:
+          type: string
+          format: uri
+          description: The remote's http(s) URL without `/api`, e.g. `https://units.example.com`.
+        pollIntervalSec:
+          type: integer
+          minimum: 10
+          maximum: 86400
+          description: >-
+            Seconds between full syncs. Changes the remote pushes on its event
+            stream arrive in between.
+        enabled:
+          type: boolean
+
+    SyncRemote:
+      allOf:
+        - $ref: "#/components/schemas/SyncRemoteRequest"
+        - type: object
+          required: [id, lastSyncAt, lastSyncStatus, lastSyncError, createdAt, updatedAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            lastSyncAt:
+              description: End of the last full sync; null before the first.
+              oneOf:
+                - type: string
+                  format: date-time
+                - type: "null"
+            lastSyncStatus:
+              type: string
+              enum: ["", ok, error]
+            lastSyncError:
+              type: string
+              description: Why the last full sync failed; empty unless `lastSyncStatus` is `error`.
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    SyncLogEntry:
+      type: object
+      required: [time, level, message]
+      properties:
+        time:
+          type: string
+          format: date-time
+        level:
+          type: string
+          enum: [info, error]
+        message:
+          type: string
 
     UnitEvent:
       type: object

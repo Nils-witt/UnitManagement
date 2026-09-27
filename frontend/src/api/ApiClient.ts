@@ -7,10 +7,12 @@
 
 import { getToken } from './tokenStore';
 import type {
+  ApiKey,
   ApiToken,
   AuditLogEntry,
   AuditLogQuery,
   AuthMethods,
+  CreateApiKeyInput,
   CreateTokenInput,
   CreateUserInput,
   CreatedApiToken,
@@ -19,6 +21,10 @@ import type {
   LoginResponse,
   PositionHistoryEntry,
   Settings,
+  SyncIdentity,
+  SyncLogEntry,
+  SyncRemote,
+  SyncRemoteInput,
   Unit,
   UnitInput,
   UpdateUserInput,
@@ -173,6 +179,19 @@ export class ApiClient {
     return this.del(`/api/users/${id}/tokens/${tokenId}`);
   }
 
+  /** The public keys that act as the user, newest first. */
+  listUserApiKeys(id: number): Promise<ApiKey[]> {
+    return this.getJson(`/api/users/${id}/api-keys`);
+  }
+
+  createUserApiKey(id: number, input: CreateApiKeyInput): Promise<ApiKey> {
+    return this.sendJsonForJson(`/api/users/${id}/api-keys`, 'POST', input);
+  }
+
+  deleteUserApiKey(id: number, keyId: string): Promise<void> {
+    return this.del(`/api/users/${id}/api-keys/${keyId}`);
+  }
+
   // ---- groups (administrators only) ---------------------------------------
 
   listGroups(): Promise<Group[]> {
@@ -199,6 +218,39 @@ export class ApiClient {
 
   updateSettings(settings: Settings): Promise<Settings> {
     return this.sendJsonForJson('/api/settings', 'PUT', settings);
+  }
+
+  // ---- sync (administrators only) ------------------------------------------
+
+  /** This instance's server UUID and public key, for other instances to register. */
+  getSyncIdentity(): Promise<SyncIdentity> {
+    return this.getJson('/api/sync/identity');
+  }
+
+  listSyncRemotes(): Promise<SyncRemote[]> {
+    return this.getJson('/api/sync/remotes');
+  }
+
+  createSyncRemote(input: SyncRemoteInput): Promise<SyncRemote> {
+    return this.sendJsonForJson('/api/sync/remotes', 'POST', input);
+  }
+
+  updateSyncRemote(id: string, input: SyncRemoteInput): Promise<SyncRemote> {
+    return this.sendJsonForJson(`/api/sync/remotes/${id}`, 'PUT', input);
+  }
+
+  deleteSyncRemote(id: string): Promise<void> {
+    return this.del(`/api/sync/remotes/${id}`);
+  }
+
+  /** Starts a full sync now; rejects with 409 if the remote is disabled. */
+  async triggerSyncRemote(id: string): Promise<void> {
+    await this.sendJson(`/api/sync/remotes/${id}/trigger`, 'POST');
+  }
+
+  /** The remote's recent sync activity, oldest first; kept in memory only. */
+  listSyncRemoteLogs(id: string): Promise<SyncLogEntry[]> {
+    return this.getJson(`/api/sync/remotes/${id}/logs`);
   }
 
   // ---- units ---------------------------------------------------------------

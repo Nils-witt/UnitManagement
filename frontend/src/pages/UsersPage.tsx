@@ -10,6 +10,7 @@ import { useConfirm } from '../hooks/useConfirm';
 import { useUsers } from '../hooks/useUsers';
 import { errorMessage } from '../lib/errors';
 import type { SortDirection } from '../lib/sort';
+import ApiKeyDialog from './users-page/ApiKeyDialog';
 import TokenDialog from './users-page/TokenDialog';
 import UserDialog, { type UserFormValues } from './users-page/UserDialog';
 import UsersListCard from './users-page/UsersListCard';
@@ -32,6 +33,8 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
   const [tokenUser, setTokenUser] = useState<User | null>(null);
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+  const [apiKeyUser, setApiKeyUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const visibleUsers = useMemo(
@@ -66,6 +69,11 @@ export default function UsersPage() {
   const openTokenDialog = (user: User) => {
     setTokenUser(user);
     setTokenDialogOpen(true);
+  };
+
+  const openApiKeyDialog = (user: User) => {
+    setApiKeyUser(user);
+    setApiKeyDialogOpen(true);
   };
 
   const onDelete = async (u: User) => {
@@ -108,6 +116,7 @@ export default function UsersPage() {
         onSort={onSort}
         onEdit={openDialog}
         onCreateToken={openTokenDialog}
+        onApiKeys={openApiKeyDialog}
         onDelete={(u) => void onDelete(u)}
       />
       <UserDialog
@@ -121,6 +130,11 @@ export default function UsersPage() {
         open={tokenDialogOpen}
         user={tokenUser}
         onClose={() => setTokenDialogOpen(false)}
+      />
+      <ApiKeyDialog
+        open={apiKeyDialogOpen}
+        user={apiKeyUser}
+        onClose={() => setApiKeyDialogOpen(false)}
       />
     </Box>
   );

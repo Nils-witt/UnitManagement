@@ -65,6 +65,62 @@ export interface CreatedApiToken extends ApiToken {
   tokenType: 'Bearer';
 }
 
+/** A public key another program, typically another instance syncing from this
+ * one, signs its own short-lived JWTs with to act as the user. */
+export interface ApiKey {
+  /** The JWT "kid"; for another instance, its server UUID. */
+  id: string;
+  name: string;
+  publicKeyPem: string;
+  createdAt: string;
+  /** Null until first used. */
+  lastUsedAt: string | null;
+}
+
+export interface CreateApiKeyInput {
+  id: string;
+  name: string;
+  publicKeyPem: string;
+}
+
+/** What another instance needs to let this one sync from it (GET /api/sync/identity). */
+export interface SyncIdentity {
+  serverUuid: string;
+  publicKeyPem: string;
+}
+
+export type SyncStatus = '' | 'ok' | 'error';
+
+/** Another instance whose units this one mirrors. */
+export interface SyncRemote {
+  id: string;
+  name: string;
+  /** The remote's URL, without /api. */
+  baseUrl: string;
+  pollIntervalSec: number;
+  enabled: boolean;
+  /** Null before the first full sync. */
+  lastSyncAt: string | null;
+  lastSyncStatus: SyncStatus;
+  lastSyncError: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SyncRemoteInput {
+  name: string;
+  baseUrl: string;
+  /** 10 seconds to 24 hours. */
+  pollIntervalSec: number;
+  enabled: boolean;
+}
+
+export interface SyncLogEntry {
+  time: string;
+  level: 'info' | 'error';
+  message: string;
+}
+
 /** A user referenced by a record; the record keeps null once they're deleted. */
 export interface InstanceInfo {
   /** Name of this deployment; absent when not configured. */
@@ -158,6 +214,14 @@ export interface Unit {
   updatedAt: string;
   createdBy: UserRef | null;
   updatedBy: UserRef | null;
+  /** The instance the unit is mirrored from, where alone it can be changed;
+   * null for local units. */
+  syncedFrom: SyncRemoteRef | null;
+}
+
+export interface SyncRemoteRef {
+  id: string;
+  name: string;
 }
 
 export interface UnitInput {
@@ -183,6 +247,12 @@ export const AUDIT_ACTIONS = [
   'user.delete',
   'token.create',
   'token.revoke',
+  'api_key.create',
+  'api_key.delete',
+  'sync_remote.create',
+  'sync_remote.update',
+  'sync_remote.delete',
+  'sync_remote.trigger',
   'unit.create',
   'unit.update',
   'unit.delete',
@@ -201,7 +271,7 @@ export interface AuditLogEntry {
   /** The actor's username at the time; for a failed sign-in, the one tried. */
   actorName: string;
   /** Empty for sign-ins and sign-outs. */
-  targetType: '' | 'user' | 'token' | 'unit';
+  targetType: '' | 'user' | 'token' | 'unit' | 'api_key' | 'sync_remote';
   targetId: string;
   targetName: string;
   /** Action-specific values, e.g. `changed` for unit updates. */

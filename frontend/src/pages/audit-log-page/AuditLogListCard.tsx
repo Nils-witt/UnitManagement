@@ -36,6 +36,10 @@ function describeDetails(e: AuditLogEntry, t: TFunction, locale: string): string
     parts.push(d.isAdmin ? t('auditLog.details.admin') : t('auditLog.details.notAdmin'));
   }
   if (d.passwordChanged === true) parts.push(t('auditLog.details.passwordChanged'));
+  if (typeof d.baseUrl === 'string') parts.push(d.baseUrl);
+  if (typeof d.enabled === 'boolean') {
+    parts.push(d.enabled ? t('auditLog.details.enabled') : t('auditLog.details.disabled'));
+  }
   if (typeof d.username === 'string') {
     parts.push(t('auditLog.details.forUser', { name: d.username }));
   }

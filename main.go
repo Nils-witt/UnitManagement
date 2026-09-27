@@ -17,7 +17,10 @@ import (
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/config"
 	"go-unit-mangement/internal/database"
+	"go-unit-mangement/internal/remotesync"
 	"go-unit-mangement/internal/server"
+	"go-unit-mangement/internal/serverid"
+	"go-unit-mangement/internal/serverkey"
 	"go-unit-mangement/internal/settings"
 	"go-unit-mangement/internal/units"
 	"go-unit-mangement/internal/version"
@@ -109,7 +112,24 @@ func run() error {
 		return err
 	}
 
-	app := server.New(cfg, authService, oidcProvider, unitService, auditService, settingsService)
+	// This instance's identity towards the instances it syncs from.
+	serverKey, err := serverkey.EnsureLoadPrivateKey(cfg.KeysDir)
+	if err != nil {
+		return err
+	}
+	serverUUID, err := serverid.EnsureServerUUID(cfg.KeysDir)
+	if err != nil {
+		return err
+	}
+	slog.Info("server identity", "uuid", serverUUID, "keysDir", cfg.KeysDir)
+	syncManager := remotesync.NewManager(db, unitService, serverKey, serverUUID)
+	syncDone := make(chan struct{})
+	go func() {
+		defer close(syncDone)
+		syncManager.Run(ctx)
+	}()
+
+	app := server.New(cfg, authService, oidcProvider, unitService, auditService, settingsService, syncManager)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           app.Handler(frontend.Dist()),
@@ -135,5 +155,8 @@ func run() error {
 	slog.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return errors.Join(srv.Shutdown(shutdownCtx), app.CloseStreams(shutdownCtx))
+	err = errors.Join(srv.Shutdown(shutdownCtx), app.CloseStreams(shutdownCtx))
+	// ctx is done, so the sync workers are stopping too.
+	<-syncDone
+	return err
 }

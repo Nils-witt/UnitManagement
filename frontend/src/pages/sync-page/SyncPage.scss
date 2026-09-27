@@ -1,0 +1,46 @@
+.sync-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sync-page__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  max-width: 800px;
+}
+
+.sync-page__copy-field {
+  align-items: flex-start;
+}
+
+.sync-page__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.sync-page__mono {
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.sync-page__nowrap {
+  white-space: nowrap;
+}
+
+.sync-page__actions {
+  flex-wrap: wrap;
+}
+
+.sync-page__form {
+  padding-top: 8px;
+}
+
+.sync-page__form-actions {
+  justify-content: flex-end;
+}

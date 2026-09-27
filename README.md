@@ -31,6 +31,20 @@ Tokens are trusted from the SSO provider above (if configured) and from every is
 
 The token's subject resolves to an account the same way an SSO sign-in does, creating one on first use. Accounts are keyed by `sub` alone, not by issuer, so the same subject arriving via the SSO provider or any additional issuer is one account. **Only trust issuers that share one subject namespace** (e.g. the same identity provider reachable under several issuer URLs): any trusted issuer can act as any account whose `sub` it can put into a token. If several accounts are already linked to the same subject, the oldest one is used. Groups (and, with `OIDC_ADMIN_GROUP`, the administrator role) are synced from the token's `OIDC_GROUPS_CLAIM` claim only if the access token carries it. A verified token is reused for up to a minute before it is checked again.
 
+## Syncing units between instances
+
+An instance can mirror the units of other instances ("sync remotes"), the same way [Tileserve-GO](https://github.com/Nils-witt/Tileserve-GO) mirrors maps. Mirrored units keep their IDs, show which instance they come from, and can only be changed there: editing, moving or deleting one locally is refused with `409 Conflict`. Their position history is recorded locally as positions arrive.
+
+Each instance has a persistent identity in `KEYS_DIR` (default `./data/keys`), created on first start: a server UUID (`server.uuid`) and a 4096-bit RSA key pair (`server.key`, `server.pub`). Keep this directory on persistent storage (in Docker, mount a volume and set `KEYS_DIR`, e.g. `/data/keys`): a new identity has to be registered again on every remote.
+
+To let instance B sync from instance A:
+
+1. On B, open **Sync** and copy the server UUID and public key.
+2. On A, open **Users**, pick (or create) a user allowed to read units, and add them under **API keys**: the key ID is B's server UUID, the public key B's.
+3. On B, under **Sync**, add A with its URL (e.g. `https://units-a.example.com`).
+
+B then lists A's units right away and every poll interval ("full sync"), and follows A's unit event stream in between, so changes arrive within about a second. Every request is signed with a fresh RS256 JWT (valid 5 minutes, `kid` = B's server UUID) that A checks against the registered public key; A accepts such tokens for up to an hour of lifetime. Units A lists that B has itself (e.g. when both sync from each other) are left alone. A unit that disappears from A is deleted on B; deleting the remote on B keeps its units as ordinary local units. The **Sync** page shows each remote's last full sync and a log of recent activity (kept in memory only).
+
 ## Development
 
 Run the Go server (`go run .`) and, in another terminal, `make dev-frontend`. Vite serves the UI with hot reload on http://localhost:5173 and proxies `/api` to `:8080`.
@@ -67,7 +81,7 @@ The unit position history is kept forever unless `POSITION_HISTORY_RETENTION` is
 
 ### Audit log
 
-Administrators can see who signed in (and who failed to), and who created, changed or deleted which users, API tokens and units, on the Audit log page or at `GET /api/audit-log`. A unit's position is never recorded, including removing it, since the position history already covers it; an update that changes only the position leaves no entry. Entries are kept forever unless `AUDIT_LOG_RETENTION` is set to a duration (e.g. `2160h` for 90 days); older entries are then deleted hourly.
+Administrators can see who signed in (and who failed to), and who created, changed or deleted which users, API tokens, API keys, sync remotes and units, on the Audit log page or at `GET /api/audit-log`. A unit's position is never recorded, including removing it, since the position history already covers it; an update that changes only the position leaves no entry. Entries are kept forever unless `AUDIT_LOG_RETENTION` is set to a duration (e.g. `2160h` for 90 days); older entries are then deleted hourly.
 
 ## API
 
@@ -85,9 +99,20 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | POST   | `/api/users`       | `{username, password, isAdmin}` (admin) |
 | PUT    | `/api/users/{id}`  | `{isAdmin, password?}` (admin)       |
 | DELETE | `/api/users/{id}`  | Delete user (admin)                  |
+| GET    | `/api/users/{id}/api-keys` | List the user's API keys (admin) |
+| POST   | `/api/users/{id}/api-keys` | `{id, name, publicKeyPem}`: register a public key (admin) |
+| DELETE | `/api/users/{id}/api-keys/{keyId}` | Delete an API key (admin) |
 | GET    | `/api/groups`      | List groups with members (admin)     |
 | GET    | `/api/settings`    | `{mapStyleUrl}`: instance-wide settings |
 | PUT    | `/api/settings`    | `{mapStyleUrl}`; empty restores the default (admin) |
+| GET    | `/api/sync/identity` | `{serverUuid, publicKeyPem}`: this instance's sync identity (admin) |
+| GET    | `/api/sync/remotes` | List sync remotes with their last sync status (admin) |
+| POST   | `/api/sync/remotes` | `{name, baseUrl, pollIntervalSec, enabled}` (admin) |
+| GET    | `/api/sync/remotes/{id}` | Get a sync remote (admin) |
+| PUT    | `/api/sync/remotes/{id}` | Same body as POST (admin) |
+| DELETE | `/api/sync/remotes/{id}` | Delete a sync remote; its units stay as local ones (admin) |
+| POST   | `/api/sync/remotes/{id}/trigger` | Start a full sync now (admin) |
+| GET    | `/api/sync/remotes/{id}/logs` | Recent sync activity, oldest first (admin) |
 | GET    | `/api/audit-log?limit=&before=&action=&actor=&targetType=&targetId=&since=&to=` | Audit log, newest first (admin) |
 | GET    | `/api/units`       | List units                           |
 | POST   | `/api/units`       | `{name, position?: {lat, lon, height?, accuracy?, speed?, course?, timestamp?}, symbol?, tacticalName?}` |

@@ -95,6 +95,11 @@ type Unit struct {
 	CreatedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
 	UpdatedByID *uint
 	UpdatedBy   *User `gorm:"constraint:OnDelete:SET NULL"`
+	// SyncRemoteID is set for units mirrored from another instance (see
+	// internal/sync); only sync changes those. It becomes nil, turning the
+	// unit into an ordinary local one, when the remote is deleted.
+	SyncRemoteID *uuid.UUID  `gorm:"type:uuid;index"`
+	SyncRemote   *SyncRemote `gorm:"constraint:OnDelete:SET NULL"`
 }
 
 // UnitSymbol describes a tactical symbol (DV 102) as the component IDs of the
@@ -193,4 +198,38 @@ type Setting struct {
 	Key       string `gorm:"primaryKey"`
 	Value     string `gorm:"not null"`
 	UpdatedAt time.Time
+}
+
+// APIKey lets another program, typically another instance syncing from this
+// one (see internal/sync), act as a user by signing its own short-lived RS256
+// JWTs: the JWT's "kid" header is the key's ID, and its signature is checked
+// against PublicKeyPEM. Only the public key is stored.
+type APIKey struct {
+	ID     uuid.UUID `gorm:"type:uuid;primaryKey"`
+	UserID uint      `gorm:"index;not null"`
+	User   User      `gorm:"constraint:OnDelete:CASCADE"`
+	Name   string    `gorm:"not null"`
+	// PublicKeyPEM is a PEM-encoded PKIX RSA public key.
+	PublicKeyPEM string `gorm:"not null"`
+	CreatedAt    time.Time
+	LastUsedAt   *time.Time
+}
+
+// SyncRemote is another instance whose units this one mirrors (see
+// internal/sync). It authenticates there with this server's own key pair and
+// UUID, registered as an API key on the remote.
+type SyncRemote struct {
+	ID   uuid.UUID `gorm:"type:uuid;primaryKey"`
+	Name string    `gorm:"not null"`
+	// BaseURL is the remote's public URL, without the /api path.
+	BaseURL         string `gorm:"not null"`
+	PollIntervalSec int    `gorm:"not null"`
+	Enabled         bool   `gorm:"not null"`
+	// LastSyncAt, LastSyncStatus ("ok" or "error") and LastSyncError describe
+	// the most recent full sync pass; LastSyncAt is nil before the first.
+	LastSyncAt     *time.Time
+	LastSyncStatus string `gorm:"not null;default:''"`
+	LastSyncError  string `gorm:"not null;default:''"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }

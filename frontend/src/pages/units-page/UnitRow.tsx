@@ -1,4 +1,4 @@
-import { Button, Stack, TableCell, TableRow, Typography } from '@mui/material';
+import { Button, Chip, Stack, TableCell, TableRow, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Unit } from '../../api/types';
 import UnitSymbolIcon from '../../components/UnitSymbolIcon';
@@ -19,7 +19,13 @@ export default function UnitRow({
 }) {
   const { t, i18n } = useTranslation();
   const p = u.position;
+  // Synced units have no local creator or editor; the remote's aren't mirrored.
+  const byName = (username: string | undefined) =>
+    username ??
+    (u.syncedFrom ? t('unitRow.syncUser', { name: u.syncedFrom.name }) : t('unitRow.deletedUser'));
   const tacticalName = formatTacticalName(u.tacticalName);
+  const synced = u.syncedFrom !== null;
+  const syncedTitle = synced ? t('unitRow.syncedHint', { name: u.syncedFrom?.name }) : undefined;
   return (
     <TableRow hover>
       <TableCell>
@@ -31,6 +37,16 @@ export default function UnitRow({
               <Typography variant="caption" color="text.secondary" component="div">
                 {tacticalName}
               </Typography>
+            )}
+            {u.syncedFrom && (
+              <Chip
+                size="small"
+                variant="outlined"
+                color="info"
+                title={syncedTitle}
+                label={t('unitRow.syncedFrom', { name: u.syncedFrom.name })}
+                className="unit-row__synced"
+              />
             )}
           </div>
         </Stack>
@@ -57,13 +73,13 @@ export default function UnitRow({
       <TableCell>
         {fmtDate(u.updatedAt, i18n.language)}
         <Typography variant="caption" color="text.secondary" component="div">
-          {t('unitRow.by', { name: u.updatedBy?.username ?? t('unitRow.deletedUser') })}
+          {t('unitRow.by', { name: byName(u.updatedBy?.username) })}
         </Typography>
       </TableCell>
       <TableCell>
         {fmtDate(u.createdAt, i18n.language)}
         <Typography variant="caption" color="text.secondary" component="div">
-          {t('unitRow.by', { name: u.createdBy?.username ?? t('unitRow.deletedUser') })}
+          {t('unitRow.by', { name: byName(u.createdBy?.username) })}
         </Typography>
       </TableCell>
       <TableCell className="unit-row__actions">
@@ -71,6 +87,8 @@ export default function UnitRow({
           <Button
             size="small"
             onClick={onEdit}
+            disabled={synced}
+            title={syncedTitle}
             aria-label={t('unitRow.editAria', { name: u.name })}
           >
             {t('common.edit')}
@@ -85,6 +103,8 @@ export default function UnitRow({
           <Button
             size="small"
             color="error"
+            disabled={synced}
+            title={syncedTitle}
             aria-label={t('unitRow.deleteAria', { name: u.name })}
             onClick={onDelete}
           >

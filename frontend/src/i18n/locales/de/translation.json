@@ -23,7 +23,8 @@
     "map": "Karte",
     "groups": "Gruppen",
     "auditLog": "Protokoll",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "sync": "Synchronisation"
   },
   "auth": {
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
@@ -105,6 +106,24 @@
     "copied": "Kopiert",
     "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen. Markieren und kopieren Sie das Token manuell."
   },
+  "apiKeyDialog": {
+    "title": "API-Schlüssel von {{name}}",
+    "info": "Mit einem API-Schlüssel handelt ein anderes Programm als {{name}}, indem es eigene kurzlebige Tokens mit einem privaten Schlüssel signiert; hier wird nur der öffentliche Schlüssel gespeichert. Damit eine andere Instanz dieser Anwendung Einheiten von hier synchronisieren kann, trage ihre Server-UUID und ihren öffentlichen Schlüssel (auf ihrer Seite „Synchronisation“) für einen Benutzer ein, der Einheiten lesen darf.",
+    "newKey": "Neuer API-Schlüssel",
+    "nameLabel": "Name",
+    "nameHint": "Z. B. die Instanz, die ihn nutzt",
+    "idLabel": "Schlüssel-ID",
+    "idHint": "Eine UUID; für eine andere Instanz deren Server-UUID",
+    "publicKeyLabel": "Öffentlicher Schlüssel (PEM)",
+    "publicKeyHint": "RSA, mindestens 2048 Bit",
+    "created": "Erstellt",
+    "lastUsed": "Zuletzt verwendet",
+    "never": "Nie",
+    "empty": "Keine API-Schlüssel",
+    "deleteAria": "API-Schlüssel {{name}} löschen",
+    "deleteTitle": "API-Schlüssel löschen",
+    "deleteMessage": "API-Schlüssel „{{name}}“ löschen? Er funktioniert sofort nicht mehr."
+  },
   "userRow": {
     "you": "Sie",
     "sso": "SSO",
@@ -115,7 +134,9 @@
     "editAria": "{{name}} bearbeiten",
     "deleteAria": "{{name}} löschen",
     "createToken": "API-Tokens",
-    "createTokenAria": "API-Tokens von {{name}} verwalten"
+    "createTokenAria": "API-Tokens von {{name}} verwalten",
+    "apiKeys": "API-Schlüssel",
+    "apiKeysAria": "API-Schlüssel von {{name}} verwalten"
   },
   "usersListCard": {
     "signIn": "Anmeldung",
@@ -170,7 +191,10 @@
     "editAria": "{{name}} bearbeiten",
     "deleteAria": "{{name}} löschen",
     "history": "Verlauf",
-    "historyAria": "Positionsverlauf von {{name}}"
+    "historyAria": "Positionsverlauf von {{name}}",
+    "syncedFrom": "Synchronisiert von {{name}}",
+    "syncedHint": "Gespiegelt von {{name}}; kann nur dort geändert werden.",
+    "syncUser": "Synchronisation von {{name}}"
   },
   "unitHistory": {
     "title": "Positionsverlauf von {{name}}",
@@ -254,6 +278,12 @@
       "user.delete": "Benutzer gelöscht",
       "token.create": "API-Token erstellt",
       "token.revoke": "API-Token widerrufen",
+      "api_key.create": "API-Schlüssel erstellt",
+      "api_key.delete": "API-Schlüssel gelöscht",
+      "sync_remote.create": "Sync-Quelle hinzugefügt",
+      "sync_remote.update": "Sync-Quelle geändert",
+      "sync_remote.delete": "Sync-Quelle gelöscht",
+      "sync_remote.trigger": "Synchronisation gestartet",
       "unit.create": "Einheit angelegt",
       "unit.update": "Einheit geändert",
       "unit.delete": "Einheit gelöscht",
@@ -262,7 +292,9 @@
     "targetTypes": {
       "user": "Benutzer",
       "token": "API-Token",
-      "unit": "Einheit"
+      "unit": "Einheit",
+      "api_key": "API-Schlüssel",
+      "sync_remote": "Sync-Quelle"
     },
     "details": {
       "method": {
@@ -280,7 +312,9 @@
         "symbol": "taktisches Zeichen",
         "tacticalName": "taktischer Name",
         "mapStyleUrl": "Kartenstil"
-      }
+      },
+      "enabled": "aktiviert",
+      "disabled": "deaktiviert"
     }
   },
   "settings": {
@@ -289,5 +323,55 @@
     "mapStyleUrlHelp": "URL eines MapLibre-Style-JSON, gilt für alle Benutzer. Kacheln, Sprites und Schriften müssen vom selben Host kommen. Leer lassen, um OpenStreetMap zu verwenden.",
     "useDefault": "OpenStreetMap verwenden",
     "saved": "Einstellungen gespeichert."
+  },
+  "syncPage": {
+    "identityTitle": "Diese Instanz",
+    "identityHelp": "Um Einheiten von einer anderen Instanz zu synchronisieren, trägt ein Administrator dort diese Server-UUID und diesen öffentlichen Schlüssel als API-Schlüssel (Benutzer → API-Schlüssel) für einen Benutzer ein, der Einheiten lesen darf. Füge die Instanz dann unten hinzu.",
+    "serverUuid": "Server UUID",
+    "publicKey": "Öffentlicher Schlüssel",
+    "copy": "Kopieren",
+    "copyAria": "{{label}} kopieren",
+    "copied": "Kopiert",
+    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen. Markiere den Text und kopiere ihn manuell.",
+    "remotesTitle": "Sync-Quellen",
+    "remotesHelp": "Die Einheiten dieser Instanzen werden hierher gespiegelt und folgen ihren Änderungen live. Gespiegelte Einheiten können nur auf ihrer Instanz geändert werden; wird eine Quelle gelöscht, bleiben ihre Einheiten als lokale erhalten.",
+    "newRemote": "Quelle hinzufügen",
+    "name": "Name",
+    "baseUrl": "URL",
+    "interval": "Vollabgleich",
+    "intervalValue_one": "alle {{count}} Sekunde",
+    "intervalValue_other": "alle {{count}} Sekunden",
+    "status": "Status",
+    "statusOk": "OK",
+    "statusError": "Fehler",
+    "statusPending": "Ausstehend",
+    "statusDisabled": "Deaktiviert",
+    "syncNow": "Jetzt synchronisieren",
+    "syncNowAria": "{{name}} jetzt synchronisieren",
+    "logs": "Protokoll",
+    "logsAria": "Sync-Protokoll von {{name}}",
+    "editAria": "{{name}} bearbeiten",
+    "deleteAria": "{{name}} löschen",
+    "deleteTitle": "Sync-Quelle löschen",
+    "deleteMessage": "Sync-Quelle „{{name}}“ löschen? Ihre Einheiten bleiben hier als lokale Einheiten erhalten.",
+    "refresh": "Aktualisieren",
+    "empty": "Keine Sync-Quellen"
+  },
+  "syncRemoteDialog": {
+    "newTitle": "Sync-Quelle hinzufügen",
+    "editTitle": "{{name}} bearbeiten",
+    "nameLabel": "Name",
+    "baseUrlLabel": "URL der Instanz",
+    "baseUrlHint": "Die Adresse ihrer Weboberfläche, ohne /api",
+    "intervalLabel": "Vollabgleich alle (Sekunden)",
+    "intervalHint": "10 bis 86400. Änderungen kommen dazwischen live an.",
+    "enabled": "Aktiviert"
+  },
+  "syncLogs": {
+    "title": "Sync-Protokoll von {{name}}",
+    "notice": "Letzte Aktivität, neueste zuerst. Nur im Arbeitsspeicher gehalten, daher nach einem Neustart leer.",
+    "time": "Zeit",
+    "message": "Meldung",
+    "empty": "Noch keine Aktivität"
   }
 }

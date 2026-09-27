@@ -33,6 +33,12 @@ var (
 	ErrInvalidPosition     = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, height finite, accuracy and speed finite and not negative, and course at least 0 and below 360")
 	ErrInvalidSymbol       = errors.New("symbol components must be IDs of lowercase letters, digits and dashes")
 	ErrInvalidTacticalName = fmt.Errorf("tactical name parts must be at most %d characters without control characters", MaxTacticalNamePartLength)
+	// ErrUnitSynced means the unit is mirrored from another instance, where
+	// alone it can be changed.
+	ErrUnitSynced = errors.New("unit is synced from another instance and can only be changed there")
+	// ErrNotMirrored means a synced unit's ID belongs to a local unit or one
+	// mirrored from another remote, which sync leaves alone.
+	ErrNotMirrored = errors.New("a unit with this id exists but is not mirrored from this remote")
 )
 
 // symbolIDPattern matches the component IDs of @taktische-zeichen/core. The
@@ -144,6 +150,9 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 		if err != nil {
 			return fmt.Errorf("get unit %s: %w", id, err)
 		}
+		if unit.SyncRemoteID != nil {
+			return ErrUnitSynced
+		}
 		before := unit
 		in := inputOf(&unit)
 		patch(&in)
@@ -185,15 +194,19 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 	return updated, changed, nil
 }
 
-// Delete removes the unit and returns it as it was.
+// Delete removes the unit and returns it as it was. Units synced from another
+// instance can't be deleted (ErrUnitSynced).
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.Unit, error) {
 	var unit models.Unit
-	res := s.db.WithContext(ctx).Clauses(clause.Returning{}).Where("id = ?", id).Delete(&unit)
+	res := s.db.WithContext(ctx).Clauses(clause.Returning{}).Where("id = ? AND sync_remote_id IS NULL", id).Delete(&unit)
 	if res.Error != nil {
 		return nil, fmt.Errorf("delete unit %s: %w", id, res.Error)
 	}
 	if res.RowsAffected == 0 {
-		return nil, ErrUnitNotFound
+		if _, err := s.Get(ctx, id); err != nil {
+			return nil, err
+		}
+		return nil, ErrUnitSynced
 	}
 	s.events.Publish(Event{Type: EventDeleted, ID: id})
 	return &unit, nil
@@ -298,10 +311,14 @@ func (s *Service) deleteHistoryBefore(ctx context.Context, cutoff time.Time) (in
 }
 
 // recordPosition appends the unit's current position, if it has one, to its
-// history.
+// history. by is nil for positions synced from another instance.
 func recordPosition(tx *gorm.DB, unit *models.Unit, by *models.User) error {
 	if !unit.HasPosition() {
 		return nil
+	}
+	var recordedBy *uint
+	if by != nil {
+		recordedBy = &by.ID
 	}
 	entry := models.UnitPosition{
 		UnitID:       unit.ID,
@@ -312,7 +329,7 @@ func recordPosition(tx *gorm.DB, unit *models.Unit, by *models.User) error {
 		Speed:        unit.Speed,
 		Course:       unit.Course,
 		Timestamp:    *unit.PositionTimestamp,
-		RecordedByID: &by.ID,
+		RecordedByID: recordedBy,
 	}
 	if err := tx.Create(&entry).Error; err != nil {
 		return fmt.Errorf("record position of unit %s: %w", unit.ID, err)
@@ -340,7 +357,7 @@ func equalPtr[T comparable](a, b *T) bool {
 }
 
 func (s *Service) preload(ctx context.Context) *gorm.DB {
-	return s.db.WithContext(ctx).Preload("CreatedBy").Preload("UpdatedBy")
+	return s.db.WithContext(ctx).Preload("CreatedBy").Preload("UpdatedBy").Preload("SyncRemote")
 }
 
 // inputOf returns the unit's editable fields.

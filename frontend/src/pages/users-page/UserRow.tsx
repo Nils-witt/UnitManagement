@@ -9,12 +9,14 @@ export default function UserRow({
   self,
   onEdit,
   onCreateToken,
+  onApiKeys,
   onDelete,
 }: {
   u: User;
   self: boolean;
   onEdit: () => void;
   onCreateToken: () => void;
+  onApiKeys: () => void;
   onDelete: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -60,6 +62,13 @@ export default function UserRow({
             aria-label={t('userRow.createTokenAria', { name: u.username })}
           >
             {t('userRow.createToken')}
+          </Button>
+          <Button
+            size="small"
+            onClick={onApiKeys}
+            aria-label={t('userRow.apiKeysAria', { name: u.username })}
+          >
+            {t('userRow.apiKeys')}
           </Button>
           <Button
             size="small"

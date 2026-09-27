@@ -36,6 +36,12 @@ type Config struct {
 	// including the unit event WebSocket. Empty means same-origin only.
 	CORSAllowedOrigins []string
 
+	// KeysDir holds this instance's server UUID and RSA key pair, which it
+	// authenticates to sync remotes with (see internal/remotesync). Both are
+	// generated on first startup and must persist, or every remote has to
+	// register the new identity.
+	KeysDir string
+
 	// Initial admin account, created on startup if no users exist yet.
 	AdminUsername string
 	AdminPassword string
@@ -106,6 +112,7 @@ func Load() (*Config, error) {
 		CORSAllowedOrigins:       origins,
 		AuditLogRetention:        retention,
 		PositionHistoryRetention: historyRetention,
+		KeysDir:                  getEnv("KEYS_DIR", "./data/keys"),
 		AdminUsername:            getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:            adminPassword,
 		OIDC: auth.OIDCConfig{

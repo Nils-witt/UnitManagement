@@ -250,9 +250,13 @@ func (s *Service) Logout(ctx context.Context, token string) (*models.User, error
 // logout and password resets revoke it. This runs on every authenticated
 // request, so the user is fetched with a JOIN in one round trip instead of
 // Preload's second query. With SetOIDCAccessTokens, a trusted OIDC
-// provider's access token is accepted too (see userForAccessToken).
+// provider's access token is accepted too (see userForAccessToken), and a
+// JWT signed with a registered API key always is (see userForAPIKey).
 func (s *Service) UserForToken(ctx context.Context, token string) (*models.User, error) {
 	if user, handled, err := s.userForAccessToken(ctx, token); handled {
+		return user, err
+	}
+	if user, handled, err := s.userForAPIKey(ctx, token); handled {
 		return user, err
 	}
 	sessionID, userID, err := s.tokens.verify(token)

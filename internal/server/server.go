@@ -12,6 +12,7 @@ import (
 	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/config"
+	"go-unit-mangement/internal/remotesync"
 	"go-unit-mangement/internal/settings"
 	"go-unit-mangement/internal/units"
 )
@@ -25,6 +26,8 @@ type Server struct {
 	audit *audit.Service
 	// settings are changed by administrators at runtime; the CSP follows them.
 	settings *settings.Service
+	// sync mirrors the units of other instances.
+	sync *remotesync.Manager
 	// loginFailuresByIP and loginFailuresByUser throttle password guessing
 	// (see handleLogin).
 	loginFailuresByIP   *failureLimiter
@@ -36,9 +39,9 @@ type Server struct {
 	streams      sync.WaitGroup
 }
 
-func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service, auditService *audit.Service, settingsService *settings.Service) *Server {
+func New(cfg *config.Config, authService *auth.Service, oidc *auth.OIDCProvider, unitService *units.Service, auditService *audit.Service, settingsService *settings.Service, syncManager *remotesync.Manager) *Server {
 	return &Server{
-		cfg: cfg, auth: authService, oidc: oidc, units: unitService, audit: auditService, settings: settingsService,
+		cfg: cfg, auth: authService, oidc: oidc, units: unitService, audit: auditService, settings: settingsService, sync: syncManager,
 		loginFailuresByIP:   newFailureLimiter(loginFailuresPerIP, loginFailureWindow),
 		loginFailuresByUser: newFailureLimiter(loginFailuresPerUser, loginFailureWindow),
 		shutdown:            make(chan struct{}),
@@ -86,10 +89,21 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("GET /api/users/{id}/tokens", admin(s.handleListTokens))
 	mux.Handle("POST /api/users/{id}/tokens", admin(s.handleCreateToken))
 	mux.Handle("DELETE /api/users/{id}/tokens/{tokenId}", admin(s.handleRevokeToken))
+	mux.Handle("GET /api/users/{id}/api-keys", admin(s.handleListAPIKeys))
+	mux.Handle("POST /api/users/{id}/api-keys", admin(s.handleCreateAPIKey))
+	mux.Handle("DELETE /api/users/{id}/api-keys/{keyId}", admin(s.handleDeleteAPIKey))
 	mux.Handle("GET /api/groups", admin(s.handleListGroups))
 	mux.Handle("GET /api/audit-log", admin(s.handleListAuditLog))
 	mux.Handle("GET /api/settings", authed(s.handleGetSettings))
 	mux.Handle("PUT /api/settings", admin(s.handleUpdateSettings))
+	mux.Handle("GET /api/sync/identity", admin(s.handleSyncIdentity))
+	mux.Handle("GET /api/sync/remotes", admin(s.handleListSyncRemotes))
+	mux.Handle("POST /api/sync/remotes", admin(s.handleCreateSyncRemote))
+	mux.Handle("GET /api/sync/remotes/{id}", admin(s.handleGetSyncRemote))
+	mux.Handle("PUT /api/sync/remotes/{id}", admin(s.handleUpdateSyncRemote))
+	mux.Handle("DELETE /api/sync/remotes/{id}", admin(s.handleDeleteSyncRemote))
+	mux.Handle("POST /api/sync/remotes/{id}/trigger", admin(s.handleTriggerSyncRemote))
+	mux.Handle("GET /api/sync/remotes/{id}/logs", admin(s.handleSyncRemoteLogs))
 
 	mux.Handle("GET /api/units", authed(s.handleListUnits))
 	mux.Handle("GET /api/units/events", authed(s.handleUnitEvents))

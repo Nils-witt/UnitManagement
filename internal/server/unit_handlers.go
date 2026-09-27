@@ -72,6 +72,14 @@ type unitResponse struct {
 	UpdatedAt    time.Time            `json:"updatedAt"`
 	CreatedBy    *userRefResponse     `json:"createdBy"`
 	UpdatedBy    *userRefResponse     `json:"updatedBy"`
+	// SyncedFrom names the instance the unit is mirrored from; null for
+	// local units. Synced units can only be changed there.
+	SyncedFrom *syncRemoteRefResponse `json:"syncedFrom"`
+}
+
+type syncRemoteRefResponse struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
 func toUnitResponse(u *models.Unit) unitResponse {
@@ -84,6 +92,9 @@ func toUnitResponse(u *models.Unit) unitResponse {
 		UpdatedAt:    u.UpdatedAt,
 		CreatedBy:    toUserRef(u.CreatedBy),
 		UpdatedBy:    toUserRef(u.UpdatedBy),
+	}
+	if u.SyncRemote != nil {
+		resp.SyncedFrom = &syncRemoteRefResponse{ID: u.SyncRemote.ID, Name: u.SyncRemote.Name}
 	}
 	if u.HasPosition() {
 		resp.Position = &positionJSON{
@@ -376,7 +387,7 @@ func writeUnitError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, units.ErrUnitNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, units.ErrNameTaken):
+	case errors.Is(err, units.ErrNameTaken), errors.Is(err, units.ErrUnitSynced):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, units.ErrInvalidName), errors.Is(err, units.ErrInvalidPosition),
 		errors.Is(err, units.ErrInvalidSymbol), errors.Is(err, units.ErrInvalidTacticalName):

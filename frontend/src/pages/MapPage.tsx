@@ -395,7 +395,8 @@ export default function MapPage() {
           },
         }}
       >
-        <MenuItem onClick={startMoving}>
+        {/* Synced units can only be moved on the instance they come from. */}
+        <MenuItem onClick={startMoving} disabled={menu?.unit.syncedFrom != null}>
           <ListItemIcon>
             <PlaceIcon fontSize="small" />
           </ListItemIcon>

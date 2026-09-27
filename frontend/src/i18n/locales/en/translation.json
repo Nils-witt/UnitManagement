@@ -23,7 +23,8 @@
     "map": "Map",
     "groups": "Groups",
     "auditLog": "Audit log",
-    "settings": "Settings"
+    "settings": "Settings",
+    "sync": "Sync"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -105,6 +106,24 @@
     "copied": "Copied",
     "copyFailed": "Could not copy to the clipboard. Select the token and copy it manually."
   },
+  "apiKeyDialog": {
+    "title": "API keys of {{name}}",
+    "info": "An API key lets another program act as {{name}} by signing its own short-lived tokens with a private key; only the public key is stored here. To let another instance of this app sync units from here, register its server UUID and public key (on its Sync page) for a user who may read units.",
+    "newKey": "New API key",
+    "nameLabel": "Name",
+    "nameHint": "E.g. the instance using it",
+    "idLabel": "Key ID",
+    "idHint": "A UUID; for another instance, its server UUID",
+    "publicKeyLabel": "Public key (PEM)",
+    "publicKeyHint": "RSA, at least 2048 bits",
+    "created": "Created",
+    "lastUsed": "Last used",
+    "never": "Never",
+    "empty": "No API keys",
+    "deleteAria": "Delete API key {{name}}",
+    "deleteTitle": "Delete API key",
+    "deleteMessage": "Delete API key \"{{name}}\"? It stops working immediately."
+  },
   "userRow": {
     "you": "you",
     "sso": "SSO",
@@ -115,7 +134,9 @@
     "editAria": "Edit {{name}}",
     "deleteAria": "Delete {{name}}",
     "createToken": "API tokens",
-    "createTokenAria": "Manage API tokens of {{name}}"
+    "createTokenAria": "Manage API tokens of {{name}}",
+    "apiKeys": "API keys",
+    "apiKeysAria": "Manage API keys of {{name}}"
   },
   "usersListCard": {
     "signIn": "Sign-in",
@@ -170,7 +191,10 @@
     "editAria": "Edit {{name}}",
     "deleteAria": "Delete {{name}}",
     "history": "History",
-    "historyAria": "Position history of {{name}}"
+    "historyAria": "Position history of {{name}}",
+    "syncedFrom": "Synced from {{name}}",
+    "syncedHint": "Mirrored from {{name}}; it can only be changed there.",
+    "syncUser": "sync from {{name}}"
   },
   "unitHistory": {
     "title": "Position history of {{name}}",
@@ -254,6 +278,12 @@
       "user.delete": "User deleted",
       "token.create": "API token created",
       "token.revoke": "API token revoked",
+      "api_key.create": "API key created",
+      "api_key.delete": "API key deleted",
+      "sync_remote.create": "Sync remote added",
+      "sync_remote.update": "Sync remote changed",
+      "sync_remote.delete": "Sync remote deleted",
+      "sync_remote.trigger": "Sync started",
       "unit.create": "Unit created",
       "unit.update": "Unit changed",
       "unit.delete": "Unit deleted",
@@ -262,7 +292,9 @@
     "targetTypes": {
       "user": "User",
       "token": "API token",
-      "unit": "Unit"
+      "unit": "Unit",
+      "api_key": "API key",
+      "sync_remote": "Sync remote"
     },
     "details": {
       "method": {
@@ -280,7 +312,9 @@
         "symbol": "tactical symbol",
         "tacticalName": "tactical name",
         "mapStyleUrl": "map style"
-      }
+      },
+      "enabled": "enabled",
+      "disabled": "disabled"
     }
   },
   "settings": {
@@ -289,5 +323,55 @@
     "mapStyleUrlHelp": "URL of a MapLibre style JSON, used by everyone. Its tiles, sprites and fonts must be served from the same host. Leave empty to use OpenStreetMap.",
     "useDefault": "Use OpenStreetMap",
     "saved": "Settings saved."
+  },
+  "syncPage": {
+    "identityTitle": "This instance",
+    "identityHelp": "To sync units from another instance, an administrator there registers this server UUID and public key as an API key (Users → API keys) for a user who may read units. Then add that instance below.",
+    "serverUuid": "Server UUID",
+    "publicKey": "Public key",
+    "copy": "Copy",
+    "copyAria": "Copy {{label}}",
+    "copied": "Copied",
+    "copyFailed": "Could not copy to the clipboard. Select the text and copy it manually.",
+    "remotesTitle": "Sync remotes",
+    "remotesHelp": "Units of these instances are mirrored here and follow their changes live. Mirrored units can only be changed on their instance; deleting a remote keeps its units as local ones.",
+    "newRemote": "Add remote",
+    "name": "Name",
+    "baseUrl": "URL",
+    "interval": "Full sync",
+    "intervalValue_one": "every {{count}} second",
+    "intervalValue_other": "every {{count}} seconds",
+    "status": "Status",
+    "statusOk": "OK",
+    "statusError": "Error",
+    "statusPending": "Pending",
+    "statusDisabled": "Disabled",
+    "syncNow": "Sync now",
+    "syncNowAria": "Sync {{name}} now",
+    "logs": "Log",
+    "logsAria": "Sync log of {{name}}",
+    "editAria": "Edit {{name}}",
+    "deleteAria": "Delete {{name}}",
+    "deleteTitle": "Delete sync remote",
+    "deleteMessage": "Delete sync remote \"{{name}}\"? Its units stay here as local units.",
+    "refresh": "Refresh",
+    "empty": "No sync remotes"
+  },
+  "syncRemoteDialog": {
+    "newTitle": "Add sync remote",
+    "editTitle": "Edit {{name}}",
+    "nameLabel": "Name",
+    "baseUrlLabel": "URL of the instance",
+    "baseUrlHint": "The address its web UI is served at, without /api",
+    "intervalLabel": "Full sync every (seconds)",
+    "intervalHint": "10 to 86400. Changes arrive live in between.",
+    "enabled": "Enabled"
+  },
+  "syncLogs": {
+    "title": "Sync log of {{name}}",
+    "notice": "Recent activity, newest first. Kept in memory only, so it starts empty after a restart.",
+    "time": "Time",
+    "message": "Message",
+    "empty": "No activity yet"
   }
 }

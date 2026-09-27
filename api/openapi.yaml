@@ -548,8 +548,8 @@ paths:
 
         Browsers can't set headers on a WebSocket, so besides the
         Authorization header the token is accepted as the subprotocols
-        `bearer, <token>`; the server then selects `bearer`. Only same-origin
-        upgrades are accepted. The stream closes when the
+        `bearer, <token>`; the server then selects `bearer`. Upgrades from
+        any origin are accepted. The stream closes when the
         session ends (code 1008), when the server shuts down (1001), or when
         the client falls too far behind (1013). Changes made while
         disconnected are not replayed, so clients should refetch
@@ -564,8 +564,6 @@ paths:
                 $ref: "#/components/schemas/UnitEvent"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "403":
-          description: Cross-origin upgrade rejected.
 
   /api/units/{id}:
     parameters:

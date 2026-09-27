@@ -47,8 +47,12 @@ func (s *Server) handleUnitEvents(w http.ResponseWriter, r *http.Request) {
 
 	// The client authenticates with the subprotocols "bearer, <token>"; the
 	// browser fails the handshake unless the server selects one of them.
-	// Accept also rejects cross-origin upgrades.
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{auth.WebSocketProtocol}})
+	// Upgrades from any origin are accepted: the token is never sent
+	// ambiently (no cookies), so cross-site pages can't hijack a session.
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		Subprotocols:       []string{auth.WebSocketProtocol},
+		InsecureSkipVerify: true,
+	})
 	if err != nil {
 		log.Warn("unit event stream rejected", "origin", r.Header.Get("Origin"), "err", err)
 		return

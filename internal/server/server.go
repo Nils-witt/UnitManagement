@@ -106,7 +106,7 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 
 	mux.Handle("/", spaHandler(frontend))
 
-	return realIP(s.cfg.TrustedProxies, logRequests(securityHeaders(mux)))
+	return realIP(s.cfg.TrustedProxies, logRequests(securityHeaders(s.cors(mux))))
 }
 
 // contentSecurityPolicy allows what the single-page app loads: its own

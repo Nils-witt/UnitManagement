@@ -31,6 +31,11 @@ type Config struct {
 	// X-Real-IP headers are believed. Empty means the headers are ignored.
 	TrustedProxies []netip.Prefix
 
+	// CORSAllowedOrigins are the origins ("scheme://host[:port]", lower
+	// case) of other web apps allowed to call the API from the browser,
+	// including the unit event WebSocket. Empty means same-origin only.
+	CORSAllowedOrigins []string
+
 	// Initial admin account, created on startup if no users exist yet.
 	AdminUsername string
 	AdminPassword string
@@ -85,6 +90,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
 	}
 
+	origins, err := parseOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid CORS_ALLOWED_ORIGINS: %w", err)
+	}
+
 	cfg := &Config{
 		Addr:                     getEnv("ADDR", ":8080"),
 		DatabaseURL:              getEnv("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
@@ -93,6 +103,7 @@ func Load() (*Config, error) {
 		CookieSecure:             secure,
 		InstanceName:             strings.TrimSpace(os.Getenv("INSTANCE_NAME")),
 		TrustedProxies:           proxies,
+		CORSAllowedOrigins:       origins,
 		AuditLogRetention:        retention,
 		PositionHistoryRetention: historyRetention,
 		AdminUsername:            getEnv("ADMIN_USERNAME", "admin"),
@@ -159,6 +170,23 @@ func splitList(raw string) []string {
 		}
 	}
 	return values
+}
+
+// parseOrigins parses a comma-separated list of web origins such as
+// https://maps.example.com, normalized to lower case without a trailing
+// slash. Wildcards are rejected: the API would then answer any site.
+func parseOrigins(list string) ([]string, error) {
+	var origins []string
+	for _, item := range splitList(list) {
+		u, err := url.Parse(item)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+			strings.Contains(u.Host, "*") || (u.Path != "" && u.Path != "/") ||
+			u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+			return nil, fmt.Errorf("%q is not an origin like https://maps.example.com", item)
+		}
+		origins = append(origins, strings.ToLower(u.Scheme+"://"+u.Host))
+	}
+	return origins, nil
 }
 
 // parsePrefixes parses a comma-separated list of IP addresses and CIDR

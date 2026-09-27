@@ -86,3 +86,33 @@ func TestLoadPositionHistoryRetention(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadCORSAllowedOrigins(t *testing.T) {
+	tests := []struct {
+		raw     string
+		want    []string
+		wantErr bool
+	}{
+		{"", nil, false},
+		{"https://Maps.Example.com, http://localhost:5173/", []string{"https://maps.example.com", "http://localhost:5173"}, false},
+		{"https://[::1]:5173", []string{"https://[::1]:5173"}, false},
+		{"*", nil, true},
+		{"https://*.example.com", nil, true},
+		{"maps.example.com", nil, true},
+		{"ftp://maps.example.com", nil, true},
+		{"https://maps.example.com/app", nil, true},
+		{"https://maps.example.com?x=1", nil, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.raw, func(t *testing.T) {
+			t.Setenv("CORS_ALLOWED_ORIGINS", tc.raw)
+			cfg, err := Load()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, want error %t", err, tc.wantErr)
+			}
+			if err == nil && !slices.Equal(cfg.CORSAllowedOrigins, tc.want) {
+				t.Errorf("origins = %q, want %q", cfg.CORSAllowedOrigins, tc.want)
+			}
+		})
+	}
+}

@@ -211,10 +211,19 @@ export interface TacticalName {
   number?: string;
 }
 
+/** A unit's FMS status: 0 to 9, see `fmsStatusColor`. */
+export interface UnitStatus {
+  code: number;
+  /** When the status was reported. */
+  timestamp: string;
+}
+
 export interface Unit {
   id: string;
   name: string;
   position: Position | null;
+  /** The FMS status; null when unknown. */
+  status: UnitStatus | null;
   symbol: UnitSymbol | null;
   tacticalName: TacticalName | null;
   createdAt: string;

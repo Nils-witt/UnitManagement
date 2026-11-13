@@ -2,8 +2,10 @@ import { Button, Chip, Stack, TableCell, TableRow, Typography } from '@mui/mater
 import { useTranslation } from 'react-i18next';
 import type { Unit } from '../../api/types';
 import UnitSymbolIcon from '../../components/UnitSymbolIcon';
+import { fmsStatusColor } from '../../lib/fmsStatus';
 import { fmtDate, fmtSpeed } from '../../lib/format';
 import { formatTacticalName } from '../../lib/tacticalName';
+import UnitStatusSelect from './UnitStatusSelect';
 import './UnitRow.scss';
 
 export default function UnitRow({
@@ -57,6 +59,21 @@ export default function UnitRow({
             )}
           </div>
         </Stack>
+      </TableCell>
+      <TableCell>
+        <Stack direction="row" spacing={1} className="unit-row__status">
+          <Chip
+            size="small"
+            color={u.status ? fmsStatusColor(u.status.code) : 'default'}
+            label={u.status ? u.status.code : '–'}
+          />
+          <UnitStatusSelect unit={u} disabled={synced} />
+        </Stack>
+        {u.status && (
+          <Typography variant="caption" color="text.secondary" component="div">
+            {fmtDate(u.status.timestamp, i18n.language)}
+          </Typography>
+        )}
       </TableCell>
       <TableCell>
         {p ? (

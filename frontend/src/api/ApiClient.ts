@@ -278,6 +278,16 @@ export class ApiClient {
     return this.sendJsonForJson(`/api/units/${id}/position`, 'DELETE', undefined);
   }
 
+  /** Sets the unit's FMS status (0 to 9), reported now. */
+  setUnitStatus(id: string, code: number): Promise<Unit> {
+    return this.sendJsonForJson(`/api/units/${id}/status`, 'PUT', { code });
+  }
+
+  /** Clears the unit's FMS status. */
+  clearUnitStatus(id: string): Promise<Unit> {
+    return this.sendJsonForJson(`/api/units/${id}/status`, 'DELETE', undefined);
+  }
+
   /** The unit's position history, newest measurement first; `since` and `to`
    * (RFC 3339) limit it to positions measured in that timeframe. */
   listUnitPositions(

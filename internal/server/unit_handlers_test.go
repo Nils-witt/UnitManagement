@@ -111,6 +111,30 @@ func TestRejectPosition(t *testing.T) {
 	}
 }
 
+func TestRejectStatus(t *testing.T) {
+	rec := httptest.NewRecorder()
+	if rejectStatus(rec, nil) {
+		t.Error("rejected a body without status")
+	}
+	rec = httptest.NewRecorder()
+	if !rejectStatus(rec, json.RawMessage(`{"code":3}`)) || rec.Code != http.StatusBadRequest {
+		t.Errorf("status in body: code = %d, want 400", rec.Code)
+	}
+}
+
+func TestStatusJSON(t *testing.T) {
+	code := 4
+	before := time.Now()
+	st := (&statusJSON{Code: &code}).status()
+	if st.Code != 4 || st.Timestamp.Before(before) {
+		t.Errorf("without timestamp: %+v, want code 4 stamped now", st)
+	}
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	if st := (&statusJSON{Code: &code, Timestamp: &ts}).status(); !st.Timestamp.Equal(ts) {
+		t.Errorf("with timestamp: %+v, want %v", st, ts)
+	}
+}
+
 func TestRejectGroups(t *testing.T) {
 	for _, tt := range []struct {
 		body    string

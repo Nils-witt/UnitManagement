@@ -118,6 +118,8 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | POST   | `/api/units`       | `{name, position?: {lat, lon, height?, accuracy?, speed?, course?, timestamp?}, symbol?, tacticalName?}` |
 | GET    | `/api/units/events` | WebSocket pushing `{type, id, unit?}` on every unit create/update/delete |
 | GET    | `/api/units/{id}`  | Get unit by UUID                     |
+| PUT    | `/api/units/{id}/status` | `{code: 0-9, timestamp?}`: sets the FMS status; the same status again changes nothing |
+| DELETE | `/api/units/{id}/status` | Clears the FMS status |
 | GET    | `/api/units/{id}/positions?limit=&since=&to=` | Position history, newest first; `since` and `to` (RFC 3339) limit it to measurements in that timeframe |
 | PUT    | `/api/units/{id}`  | Same body as POST; a missing position clears it |
 | PATCH  | `/api/units/{id}`  | Changes only the fields sent; null clears. A PUT or PATCH that changes nothing leaves `updatedAt` alone and sends no event |

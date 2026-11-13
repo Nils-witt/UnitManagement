@@ -53,6 +53,7 @@ export default function UnitsListCard({
         <TableHead>
           <TableRow>
             {sortCell('name', t('unitsListCard.name'))}
+            <TableCell>{t('unitsListCard.status')}</TableCell>
             <TableCell>{t('unitsListCard.position')}</TableCell>
             {sortCell('updatedAt', t('unitsListCard.updated'))}
             <TableCell>{t('unitsListCard.created')}</TableCell>
@@ -71,7 +72,7 @@ export default function UnitsListCard({
           ))}
           {units.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} align="center">
+              <TableCell colSpan={6} align="center">
                 {loading ? t('common.loading') : t('unitsListCard.empty')}
               </TableCell>
             </TableRow>

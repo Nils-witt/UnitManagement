@@ -25,6 +25,9 @@ const (
 	MaxTacticalNamePartLength = 32
 	// MaxHistoryLimit caps how many position history entries History returns.
 	MaxHistoryLimit = 1000
+	// MinStatus and MaxStatus bound the FMS status codes.
+	MinStatus = 0
+	MaxStatus = 9
 )
 
 var (
@@ -35,6 +38,7 @@ var (
 	ErrInvalidSymbol       = errors.New("symbol components must be IDs of lowercase letters, digits and dashes")
 	ErrInvalidTacticalName = fmt.Errorf("tactical name parts must be at most %d characters without control characters", MaxTacticalNamePartLength)
 	ErrGroupNotFound       = errors.New("group not found")
+	ErrInvalidStatus       = fmt.Errorf("status must be an FMS status from %d to %d", MinStatus, MaxStatus)
 	// ErrUnitSynced means the unit is mirrored from another instance, where
 	// alone it can be changed.
 	ErrUnitSynced = errors.New("unit is synced from another instance and can only be changed there")
@@ -62,11 +66,18 @@ type Position struct {
 	Timestamp time.Time
 }
 
-// Input holds the editable fields of a unit. A nil Position, Symbol or
-// TacticalName clears it, as does a Symbol or TacticalName without any parts.
+// Status is a unit's FMS status as reported at Timestamp.
+type Status struct {
+	Code      int
+	Timestamp time.Time
+}
+
+// Input holds the editable fields of a unit. A nil Position, Status, Symbol
+// or TacticalName clears it, as does a Symbol or TacticalName without any parts.
 type Input struct {
 	Name         string
 	Position     *Position
+	Status       *Status
 	Symbol       *models.UnitSymbol
 	TacticalName *models.TacticalName
 	// GroupIDs are the groups the unit is assigned to; duplicates are
@@ -140,15 +151,16 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 	return unit, nil
 }
 
-// Update replaces the unit's editable fields with in, except the position,
-// which only SetPosition changes; in.Position is ignored. A nil in.GroupIDs
+// Update replaces the unit's editable fields with in, except the position and
+// the status, which only SetPosition and SetStatus change; in.Position and
+// in.Status are ignored. A nil in.GroupIDs
 // keeps the unit's groups. It also returns which fields changed (see
 // Changed).
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models.User) (*models.Unit, []Field, error) {
 	return s.Patch(ctx, id, func(cur *Input) {
-		pos, groupIDs := cur.Position, cur.GroupIDs
+		pos, status, groupIDs := cur.Position, cur.Status, cur.GroupIDs
 		*cur = in
-		cur.Position = pos
+		cur.Position, cur.Status = pos, status
 		if in.GroupIDs == nil {
 			cur.GroupIDs = groupIDs
 		}
@@ -160,6 +172,19 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models
 // again changes nothing (see Patch).
 func (s *Service) SetPosition(ctx context.Context, id uuid.UUID, p *Position, by *models.User) (*models.Unit, error) {
 	unit, _, err := s.Patch(ctx, id, func(in *Input) { in.Position = p }, by)
+	return unit, err
+}
+
+// SetStatus sets the unit's FMS status, or clears it when st is nil. Setting
+// the current status again changes nothing, even with a newer timestamp, so
+// repeated reports send no event.
+func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, st *Status, by *models.User) (*models.Unit, error) {
+	unit, _, err := s.Patch(ctx, id, func(in *Input) {
+		if st != nil && in.Status != nil && in.Status.Code == st.Code {
+			return
+		}
+		in.Status = st
+	}, by)
 	return unit, err
 }
 
@@ -263,6 +288,7 @@ type Field string
 const (
 	FieldName         Field = "name"
 	FieldPosition     Field = "position"
+	FieldStatus       Field = "status"
 	FieldSymbol       Field = "symbol"
 	FieldTacticalName Field = "tacticalName"
 	FieldGroups       Field = "groups"
@@ -276,6 +302,9 @@ func Changed(a, b *models.Unit) []Field {
 	}
 	if !samePosition(a, b) {
 		changed = append(changed, FieldPosition)
+	}
+	if !sameStatus(a, b) {
+		changed = append(changed, FieldStatus)
 	}
 	if !equalPtr(a.Symbol, b.Symbol) {
 		changed = append(changed, FieldSymbol)
@@ -401,6 +430,16 @@ func samePosition(a, b *models.Unit) bool {
 		a.PositionTimestamp.Equal(*b.PositionTimestamp)
 }
 
+// sameStatus reports whether a and b have the same status, including its
+// timestamp, or both have none.
+func sameStatus(a, b *models.Unit) bool {
+	if !equalPtr(a.Status, b.Status) {
+		return false
+	}
+	return a.StatusTimestamp == b.StatusTimestamp ||
+		(a.StatusTimestamp != nil && b.StatusTimestamp != nil && a.StatusTimestamp.Equal(*b.StatusTimestamp))
+}
+
 func equalPtr[T comparable](a, b *T) bool {
 	return a == b || (a != nil && b != nil && *a == *b)
 }
@@ -482,6 +521,9 @@ func (s *Service) preload(ctx context.Context) *gorm.DB {
 // inputOf returns the unit's editable fields.
 func inputOf(unit *models.Unit) Input {
 	in := Input{Name: unit.Name, Symbol: unit.Symbol, TacticalName: unit.TacticalName, GroupIDs: groupIDs(unit.Groups)}
+	if unit.Status != nil && unit.StatusTimestamp != nil {
+		in.Status = &Status{Code: *unit.Status, Timestamp: *unit.StatusTimestamp}
+	}
 	if unit.HasPosition() {
 		in.Position = &Position{
 			Latitude:  *unit.Latitude,
@@ -515,6 +557,16 @@ func apply(unit *models.Unit, in Input) error {
 		return err
 	}
 	unit.TacticalName = tacticalName
+
+	if in.Status == nil {
+		unit.Status, unit.StatusTimestamp = nil, nil
+	} else {
+		if in.Status.Code < MinStatus || in.Status.Code > MaxStatus {
+			return ErrInvalidStatus
+		}
+		code, ts := in.Status.Code, in.Status.Timestamp.UTC()
+		unit.Status, unit.StatusTimestamp = &code, &ts
+	}
 
 	if in.Position == nil {
 		unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.Speed, unit.Course, unit.PositionTimestamp = nil, nil, nil, nil, nil, nil, nil

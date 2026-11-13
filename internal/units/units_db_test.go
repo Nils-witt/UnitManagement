@@ -117,6 +117,57 @@ func TestSetPosition(t *testing.T) {
 	}
 }
 
+func TestSetStatus(t *testing.T) {
+	s, user := newDBService(t)
+	ctx := t.Context()
+	events, stop := s.Subscribe()
+	defer stop()
+
+	ts := time.Now().UTC().Truncate(time.Second)
+	unit, err := s.Create(ctx, Input{Name: rand.Text()[:8] + "-status"}, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-events // created
+
+	updated, err := s.SetStatus(ctx, unit.ID, &Status{Code: 3, Timestamp: ts}, user)
+	if err != nil || updated.Status == nil || *updated.Status != 3 || !updated.StatusTimestamp.Equal(ts) {
+		t.Fatalf("set: unit = %+v, err = %v; want status 3", updated, err)
+	}
+	if ev := <-events; ev.Type != EventUpdated || ev.Unit == nil || *ev.Unit.Status != 3 {
+		t.Fatalf("event = %+v, want an update with status 3", ev)
+	}
+
+	// Reporting the same status again, later, changes nothing.
+	again, err := s.SetStatus(ctx, unit.ID, &Status{Code: 3, Timestamp: ts.Add(time.Minute)}, user)
+	if err != nil || !again.StatusTimestamp.Equal(ts) {
+		t.Fatalf("repeat: unit = %+v, err = %v; want the first timestamp kept", again, err)
+	}
+	select {
+	case ev := <-events:
+		t.Fatalf("repeat sent event %+v", ev)
+	default:
+	}
+
+	// Update leaves the status alone.
+	updated, _, err = s.Update(ctx, unit.ID, Input{Name: unit.Name + "-renamed"}, user)
+	if err != nil || updated.Status == nil {
+		t.Fatalf("update: unit = %+v, err = %v; want the status kept", updated, err)
+	}
+	<-events
+
+	for _, code := range []int{-1, 10} {
+		if _, err := s.SetStatus(ctx, unit.ID, &Status{Code: code, Timestamp: ts}, user); !errors.Is(err, ErrInvalidStatus) {
+			t.Errorf("code %d: err = %v, want ErrInvalidStatus", code, err)
+		}
+	}
+
+	updated, err = s.SetStatus(ctx, unit.ID, nil, user)
+	if err != nil || updated.Status != nil || updated.StatusTimestamp != nil {
+		t.Fatalf("clear: unit = %+v, err = %v; want no status", updated, err)
+	}
+}
+
 func TestDeleteHistoryBeforeKeepsNewest(t *testing.T) {
 	s, user := newDBService(t)
 	ctx := t.Context()

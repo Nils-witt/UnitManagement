@@ -40,6 +40,8 @@ type positionJSON struct {
 type unitRequest struct {
 	Name     string          `json:"name"`
 	Position json.RawMessage `json:"position"`
+	// Status is only there to be rejected, like Position.
+	Status json.RawMessage `json:"status"`
 	// Symbol's and TacticalName's JSON shapes are defined by their struct tags.
 	Symbol       *models.UnitSymbol   `json:"symbol"`
 	TacticalName *models.TacticalName `json:"tacticalName"`
@@ -55,6 +57,7 @@ type unitRequest struct {
 type unitPatchRequest struct {
 	Name         json.RawMessage `json:"name"`
 	Position     json.RawMessage `json:"position"`
+	Status       json.RawMessage `json:"status"`
 	Symbol       json.RawMessage `json:"symbol"`
 	TacticalName json.RawMessage `json:"tacticalName"`
 	GroupIDs     json.RawMessage `json:"groupIds"`
@@ -68,9 +71,11 @@ type userRefResponse struct {
 }
 
 type unitResponse struct {
-	ID           uuid.UUID            `json:"id"`
-	Name         string               `json:"name"`
-	Position     *positionJSON        `json:"position"`
+	ID       uuid.UUID     `json:"id"`
+	Name     string        `json:"name"`
+	Position *positionJSON `json:"position"`
+	// Status is the FMS status; null when unknown.
+	Status       *statusJSON          `json:"status"`
 	Symbol       *models.UnitSymbol   `json:"symbol"`
 	TacticalName *models.TacticalName `json:"tacticalName"`
 	CreatedAt    time.Time            `json:"createdAt"`
@@ -82,6 +87,27 @@ type unitResponse struct {
 	SyncedFrom *syncRemoteRefResponse `json:"syncedFrom"`
 	// Groups are the groups the unit is assigned to, by name.
 	Groups []groupRef `json:"groups"`
+}
+
+// statusJSON is a unit's FMS status, in responses and in
+// PUT /api/units/{id}/status.
+type statusJSON struct {
+	// Code is the FMS status, 0 to 9. A pointer so a request without it is
+	// rejected instead of read as 0.
+	Code *int `json:"code"`
+	// Timestamp is when the status was reported; requests may omit it to
+	// mean "now".
+	Timestamp *time.Time `json:"timestamp"`
+}
+
+// status converts st, stamping it with the current time unless it has a
+// timestamp.
+func (st *statusJSON) status() *units.Status {
+	ts := time.Now()
+	if st.Timestamp != nil {
+		ts = *st.Timestamp
+	}
+	return &units.Status{Code: *st.Code, Timestamp: ts}
 }
 
 type syncRemoteRefResponse struct {
@@ -103,6 +129,9 @@ func toUnitResponse(u *models.Unit) unitResponse {
 	}
 	if u.SyncRemote != nil {
 		resp.SyncedFrom = &syncRemoteRefResponse{ID: u.SyncRemote.ID, Name: u.SyncRemote.Name}
+	}
+	if u.Status != nil && u.StatusTimestamp != nil {
+		resp.Status = &statusJSON{Code: u.Status, Timestamp: u.StatusTimestamp}
 	}
 	if u.HasPosition() {
 		resp.Position = &positionJSON{
@@ -186,6 +215,19 @@ func rejectPosition(w http.ResponseWriter, position json.RawMessage) bool {
 		return false
 	}
 	writeError(w, http.StatusBadRequest, errPositionInUnitBody.Error())
+	return true
+}
+
+// errStatusInUnitBody is returned for unit bodies that carry a status.
+var errStatusInUnitBody = errors.New("status is set via PUT /api/units/{id}/status")
+
+// rejectStatus writes a 400 response and returns true when a unit body
+// contains a status.
+func rejectStatus(w http.ResponseWriter, status json.RawMessage) bool {
+	if status == nil {
+		return false
+	}
+	writeError(w, http.StatusBadRequest, errStatusInUnitBody.Error())
 	return true
 }
 
@@ -308,7 +350,7 @@ func (s *Server) handleUnitPositions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateUnit(w http.ResponseWriter, r *http.Request) {
 	var req unitRequest
-	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectStatus(w, req.Status) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
 		return
 	}
 	current := auth.UserFromContext(r.Context())
@@ -328,7 +370,7 @@ func (s *Server) handleUpdateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req unitRequest
-	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectStatus(w, req.Status) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
 		return
 	}
 	current := auth.UserFromContext(r.Context())
@@ -348,7 +390,7 @@ func (s *Server) handlePatchUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req unitPatchRequest
-	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectStatus(w, req.Status) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
 		return
 	}
 	patch, err := req.patch()
@@ -406,6 +448,45 @@ func (s *Server) setUnitPosition(w http.ResponseWriter, r *http.Request, id uuid
 	writeJSON(w, http.StatusOK, toUnitResponse(unit))
 }
 
+// handleSetUnitStatus sets the unit's FMS status. Status reports are as
+// frequent as positions, so they aren't recorded in the audit log either.
+func (s *Server) handleSetUnitStatus(w http.ResponseWriter, r *http.Request) {
+	id, ok := unitIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	var req statusJSON
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Code == nil {
+		writeUnitError(w, units.ErrInvalidStatus)
+		return
+	}
+	s.setUnitStatus(w, r, id, req.status())
+}
+
+func (s *Server) handleClearUnitStatus(w http.ResponseWriter, r *http.Request) {
+	id, ok := unitIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	s.setUnitStatus(w, r, id, nil)
+}
+
+// setUnitStatus sets the unit's status, or clears it when st is nil, and
+// responds with the unit.
+func (s *Server) setUnitStatus(w http.ResponseWriter, r *http.Request, id uuid.UUID, st *units.Status) {
+	current := auth.UserFromContext(r.Context())
+	unit, err := s.units.SetStatus(r.Context(), id, st, current)
+	if err != nil {
+		writeUnitError(w, err)
+		return
+	}
+	slog.Debug("unit status set", "by", current.Username, "id", id, "cleared", st == nil)
+	writeJSON(w, http.StatusOK, toUnitResponse(unit))
+}
+
 func (s *Server) handleDeleteUnit(w http.ResponseWriter, r *http.Request) {
 	id, ok := unitIDFromPath(w, r)
 	if !ok {
@@ -453,7 +534,7 @@ func writeUnitError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, units.ErrInvalidName), errors.Is(err, units.ErrInvalidPosition),
 		errors.Is(err, units.ErrInvalidSymbol), errors.Is(err, units.ErrInvalidTacticalName),
-		errors.Is(err, units.ErrGroupNotFound):
+		errors.Is(err, units.ErrGroupNotFound), errors.Is(err, units.ErrInvalidStatus):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		slog.Error("unit management", "err", err)

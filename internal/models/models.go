@@ -96,6 +96,11 @@ type Unit struct {
 	Speed             *float64 `gorm:"type:double precision"`
 	Course            *float64 `gorm:"type:double precision"`
 	PositionTimestamp *time.Time
+	// Status is the unit's FMS status (0 to 9), nil when unknown;
+	// StatusTimestamp is when it was reported and is set exactly when Status
+	// is.
+	Status          *int `gorm:"type:smallint"`
+	StatusTimestamp *time.Time
 	// Symbol is nil when the unit has no tactical symbol.
 	Symbol *UnitSymbol `gorm:"serializer:json;type:jsonb"`
 	// TacticalName is nil when the unit has no tactical name.

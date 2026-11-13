@@ -931,7 +931,7 @@ paths:
         Replaces the unit's name, symbol and tactical name; a missing or null
         symbol or tactical name clears it. Its groups are replaced only when
         `groupIds` is sent. The position is left alone; it is
-        set via `PUT /api/units/{id}/position`, and a body with `position` is
+        set via `PUT /api/units/{id}/position` and the status via `PUT /api/units/{id}/status`; a body with `position` or `status` is
         rejected.
       operationId: updateUnit
       requestBody:
@@ -965,8 +965,8 @@ paths:
       description: >
         Changes only the fields present in the body. A null symbol, tactical
         name or `groupIds` clears it; symbol, tactical name and groups are
-        replaced as a whole, not merged. The position is set via `PUT /api/units/{id}/position`, and a
-        body with `position` is rejected.
+        replaced as a whole, not merged. The position and status are set via their own endpoints, and a
+        body with `position` or `status` is rejected.
       operationId: patchUnit
       requestBody:
         required: true
@@ -1051,6 +1051,70 @@ paths:
       responses:
         "200":
           description: The unit without a position.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/UnitNotFound"
+        "409":
+          $ref: "#/components/responses/UnitSynced"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/units/{id}/status:
+    parameters:
+      - $ref: "#/components/parameters/UnitId"
+    put:
+      tags: [units]
+      summary: Set a unit's FMS status
+      description: >
+        Sets the unit's FMS status (0 to 9). Reporting the status it already
+        has changes nothing, not even the timestamp, and sends no event.
+        Status changes are not audited.
+      operationId: setUnitStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: integer
+                  minimum: 0
+                  maximum: 9
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: When the status was reported; defaults to now.
+      responses:
+        "200":
+          description: The unit with its new status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/UnitNotFound"
+        "409":
+          $ref: "#/components/responses/UnitSynced"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [units]
+      summary: Clear a unit's FMS status
+      operationId: clearUnitStatus
+      responses:
+        "200":
+          description: The unit without a status.
           content:
             application/json:
               schema:
@@ -1642,7 +1706,7 @@ components:
 
     UnitRequest:
       type: object
-      description: The position is not part of it; see `PUT /api/units/{id}/position`.
+      description: The position and status are not part of it; see `PUT /api/units/{id}/position` and `PUT /api/units/{id}/status`.
       required: [name]
       properties:
         name:
@@ -1750,6 +1814,24 @@ components:
         fachaufgabe: brandbekaempfung
         einheit: gruppe
 
+    UnitStatus:
+      type: object
+      description: >
+        FMS status: 1 available on radio, 2 available at station, 3 assignment
+        accepted, 4 on scene, 5 request to talk, 6 not available, 7 patient
+        loaded, 8 at destination, 9 foreign registration, 0 urgent request to
+        talk.
+      required: [code, timestamp]
+      properties:
+        code:
+          type: integer
+          minimum: 0
+          maximum: 9
+        timestamp:
+          type: string
+          format: date-time
+          description: When the status was reported.
+
     SymbolComponentId:
       type: string
       pattern: "^[a-z0-9-]{1,64}$"
@@ -1761,6 +1843,7 @@ components:
           id,
           name,
           position,
+          status,
           symbol,
           tacticalName,
           createdAt,
@@ -1782,6 +1865,13 @@ components:
             `PUT /api/units/{id}/position`.
           oneOf:
             - $ref: "#/components/schemas/Position"
+            - type: "null"
+        status:
+          description: >
+            The FMS status; null when unknown. Read-only here, set via
+            `PUT /api/units/{id}/status`.
+          oneOf:
+            - $ref: "#/components/schemas/UnitStatus"
             - type: "null"
         symbol:
           oneOf:

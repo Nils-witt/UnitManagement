@@ -216,7 +216,8 @@
     "position": "Position",
     "updated": "Geändert",
     "created": "Erstellt",
-    "empty": "Keine Einheiten gefunden"
+    "empty": "Keine Einheiten gefunden",
+    "status": "Status"
   },
   "unitSymbol": {
     "title": "Taktisches Zeichen",
@@ -378,5 +379,22 @@
     "time": "Zeit",
     "message": "Meldung",
     "empty": "Noch keine Aktivität"
+  },
+  "unitStatus": {
+    "label": "FMS-Status",
+    "none": "Kein Status",
+    "setAria": "FMS-Status von {{name}}",
+    "codes": {
+      "0": "Priorisierter Sprechwunsch",
+      "1": "Einsatzbereit über Funk",
+      "2": "Einsatzbereit auf Wache",
+      "3": "Einsatz übernommen",
+      "4": "Am Einsatzort",
+      "5": "Sprechwunsch",
+      "6": "Nicht einsatzbereit",
+      "7": "Patient aufgenommen",
+      "8": "Am Transportziel",
+      "9": "Fremdanmeldung"
+    }
   }
 }

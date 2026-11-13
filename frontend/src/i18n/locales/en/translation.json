@@ -216,7 +216,8 @@
     "position": "Position",
     "updated": "Updated",
     "created": "Created",
-    "empty": "No units found"
+    "empty": "No units found",
+    "status": "Status"
   },
   "unitSymbol": {
     "title": "Tactical symbol",
@@ -378,5 +379,22 @@
     "time": "Time",
     "message": "Message",
     "empty": "No activity yet"
+  },
+  "unitStatus": {
+    "label": "FMS status",
+    "none": "No status",
+    "setAria": "FMS status of {{name}}",
+    "codes": {
+      "0": "Urgent request to talk",
+      "1": "Available on radio",
+      "2": "Available at station",
+      "3": "Assignment accepted",
+      "4": "On scene",
+      "5": "Request to talk",
+      "6": "Not available",
+      "7": "Patient loaded",
+      "8": "At destination",
+      "9": "Foreign registration"
+    }
   }
 }

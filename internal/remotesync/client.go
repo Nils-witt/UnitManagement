@@ -137,6 +137,7 @@ type RemoteUnit struct {
 	ID           uuid.UUID            `json:"id"`
 	Name         string               `json:"name"`
 	Position     *RemotePosition      `json:"position"`
+	Status       *RemoteStatus        `json:"status"`
 	Symbol       *models.UnitSymbol   `json:"symbol"`
 	TacticalName *models.TacticalName `json:"tacticalName"`
 }
@@ -151,6 +152,13 @@ type RemotePosition struct {
 	Timestamp *time.Time `json:"timestamp"`
 }
 
+// RemoteStatus is a unit's FMS status. Remotes from before statuses existed
+// send none.
+type RemoteStatus struct {
+	Code      *int       `json:"code"`
+	Timestamp *time.Time `json:"timestamp"`
+}
+
 // Input returns the unit's editable fields.
 func (u *RemoteUnit) Input() units.Input {
 	in := units.Input{Name: u.Name, Symbol: u.Symbol, TacticalName: u.TacticalName}
@@ -159,6 +167,9 @@ func (u *RemoteUnit) Input() units.Input {
 			Latitude: p.Lat, Longitude: p.Lon, Height: p.Height, Accuracy: p.Accuracy,
 			Speed: p.Speed, Course: p.Course, Timestamp: *p.Timestamp,
 		}
+	}
+	if st := u.Status; st != nil && st.Code != nil && st.Timestamp != nil {
+		in.Status = &units.Status{Code: *st.Code, Timestamp: *st.Timestamp}
 	}
 	return in
 }

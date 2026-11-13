@@ -24,4 +24,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM gcr.io/distroless/static-debian12
 COPY --from=backend /server /server
 EXPOSE 8080
+# The image has no shell or curl, so the binary probes /api/health itself.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["/server", "healthcheck"]
 ENTRYPOINT ["/server"]

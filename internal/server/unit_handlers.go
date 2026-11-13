@@ -43,17 +43,21 @@ type unitRequest struct {
 	// Symbol's and TacticalName's JSON shapes are defined by their struct tags.
 	Symbol       *models.UnitSymbol   `json:"symbol"`
 	TacticalName *models.TacticalName `json:"tacticalName"`
+	// GroupIDs replaces the unit's groups; null or missing keeps them (on
+	// create: none). Only administrators may send it.
+	GroupIDs []uint `json:"groupIds"`
 }
 
 // unitPatchRequest is the body of a patch. A missing field is left
-// unchanged; a null symbol or tactical name clears it. Symbol and tactical
-// name are replaced as a whole, not merged. Position is only there to be
-// rejected, as in unitRequest.
+// unchanged; a null symbol, tactical name or group list clears it. Symbol,
+// tactical name and groups are replaced as a whole, not merged. Position is
+// only there to be rejected, as in unitRequest.
 type unitPatchRequest struct {
 	Name         json.RawMessage `json:"name"`
 	Position     json.RawMessage `json:"position"`
 	Symbol       json.RawMessage `json:"symbol"`
 	TacticalName json.RawMessage `json:"tacticalName"`
+	GroupIDs     json.RawMessage `json:"groupIds"`
 }
 
 // userRefResponse names the user who created or last changed something; it is
@@ -76,6 +80,8 @@ type unitResponse struct {
 	// SyncedFrom names the instance the unit is mirrored from; null for
 	// local units. Synced units can only be changed there.
 	SyncedFrom *syncRemoteRefResponse `json:"syncedFrom"`
+	// Groups are the groups the unit is assigned to, by name.
+	Groups []groupRef `json:"groups"`
 }
 
 type syncRemoteRefResponse struct {
@@ -93,6 +99,7 @@ func toUnitResponse(u *models.Unit) unitResponse {
 		UpdatedAt:    u.UpdatedAt,
 		CreatedBy:    toUserRef(u.CreatedBy),
 		UpdatedBy:    toUserRef(u.UpdatedBy),
+		Groups:       groupRefs(u.Groups),
 	}
 	if u.SyncRemote != nil {
 		resp.SyncedFrom = &syncRemoteRefResponse{ID: u.SyncRemote.ID, Name: u.SyncRemote.Name}
@@ -138,7 +145,21 @@ func toUserRef(u *models.User) *userRefResponse {
 }
 
 func (req *unitRequest) input() units.Input {
-	return units.Input{Name: req.Name, Symbol: req.Symbol, TacticalName: req.TacticalName}
+	return units.Input{Name: req.Name, Symbol: req.Symbol, TacticalName: req.TacticalName, GroupIDs: req.GroupIDs}
+}
+
+// errGroupsAdminOnly is returned when a non-administrator tries to change a
+// unit's groups.
+var errGroupsAdminOnly = errors.New("only administrators can assign units to groups")
+
+// rejectGroups writes a 403 response and returns true when a unit body from
+// a non-administrator contains groups.
+func rejectGroups(w http.ResponseWriter, present, isAdmin bool) bool {
+	if !present || isAdmin {
+		return false
+	}
+	writeError(w, http.StatusForbidden, errGroupsAdminOnly.Error())
+	return true
 }
 
 // position converts p, stamping it with the current time unless it has a
@@ -179,6 +200,7 @@ func (req *unitPatchRequest) patch() (func(*units.Input), error) {
 		{req.Name, &fields.Name},
 		{req.Symbol, &fields.Symbol},
 		{req.TacticalName, &fields.TacticalName},
+		{req.GroupIDs, &fields.GroupIDs},
 	} {
 		if f.raw == nil {
 			continue
@@ -200,6 +222,9 @@ func (req *unitPatchRequest) patch() (func(*units.Input), error) {
 		}
 		if req.TacticalName != nil {
 			in.TacticalName = patched.TacticalName
+		}
+		if req.GroupIDs != nil {
+			in.GroupIDs = patched.GroupIDs
 		}
 	}, nil
 }
@@ -283,7 +308,7 @@ func (s *Server) handleUnitPositions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateUnit(w http.ResponseWriter, r *http.Request) {
 	var req unitRequest
-	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
 		return
 	}
 	current := auth.UserFromContext(r.Context())
@@ -303,7 +328,7 @@ func (s *Server) handleUpdateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req unitRequest
-	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
 		return
 	}
 	current := auth.UserFromContext(r.Context())
@@ -323,7 +348,7 @@ func (s *Server) handlePatchUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req unitPatchRequest
-	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) {
+	if !decodeJSON(w, r, &req) || rejectPosition(w, req.Position) || rejectGroups(w, req.GroupIDs != nil, auth.UserFromContext(r.Context()).IsAdmin) {
 		return
 	}
 	patch, err := req.patch()
@@ -427,7 +452,8 @@ func writeUnitError(w http.ResponseWriter, err error) {
 	case errors.Is(err, units.ErrNameTaken), errors.Is(err, units.ErrUnitSynced):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, units.ErrInvalidName), errors.Is(err, units.ErrInvalidPosition),
-		errors.Is(err, units.ErrInvalidSymbol), errors.Is(err, units.ErrInvalidTacticalName):
+		errors.Is(err, units.ErrInvalidSymbol), errors.Is(err, units.ErrInvalidTacticalName),
+		errors.Is(err, units.ErrGroupNotFound):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		slog.Error("unit management", "err", err)

@@ -150,6 +150,8 @@ export interface Group {
   name: string;
   /** By username; empty once the last member has left. */
   members: UserRef[];
+  /** The units assigned to the group, by name. */
+  units: UnitRef[];
   createdAt: string;
   updatedAt: string;
 }
@@ -157,6 +159,11 @@ export interface Group {
 export interface UserRef {
   id: number;
   username: string;
+}
+
+export interface UnitRef {
+  id: string;
+  name: string;
 }
 
 export interface Position {
@@ -217,6 +224,8 @@ export interface Unit {
   /** The instance the unit is mirrored from, where alone it can be changed;
    * null for local units. */
   syncedFrom: SyncRemoteRef | null;
+  /** The groups the unit is assigned to, by name. */
+  groups: GroupRef[];
 }
 
 export interface SyncRemoteRef {
@@ -236,6 +245,9 @@ export interface UnitInput {
   symbol: UnitSymbol | null;
   /** Null clears the tactical name. */
   tacticalName: TacticalName | null;
+  /** Replaces the unit's groups; omitted keeps them. Only administrators may
+   * send it. */
+  groupIds?: number[];
 }
 
 /** A message on the unit event stream (GET /api/units/events). */

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -143,5 +144,71 @@ func TestDeleteHistoryBeforeKeepsNewest(t *testing.T) {
 	}
 	if len(history) != 1 || history[0].Longitude != 3 {
 		t.Fatalf("history = %+v, want only the newest entry (lon 3)", history)
+	}
+}
+
+func TestGroups(t *testing.T) {
+	s, user := newDBService(t)
+	ctx := t.Context()
+
+	prefix := rand.Text()[:8]
+	a := models.Group{Name: prefix + "-a"}
+	b := models.Group{Name: prefix + "-b"}
+	for _, g := range []*models.Group{&a, &b} {
+		if err := s.db.Create(g).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	names := func(u *models.Unit) []string {
+		var out []string
+		for _, g := range u.Groups {
+			out = append(out, g.Name)
+		}
+		return out
+	}
+
+	unit, err := s.Create(ctx, Input{Name: rand.Text()[:8] + "-groups", GroupIDs: []uint{b.ID, a.ID, a.ID}}, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(unit); !slices.Equal(got, []string{a.Name, b.Name}) {
+		t.Fatalf("create: groups = %v, want [%s %s]", got, a.Name, b.Name)
+	}
+
+	// Update keeps the groups when its input has none.
+	updated, changed, err := s.Update(ctx, unit.ID, Input{Name: unit.Name}, user)
+	if err != nil || len(changed) != 0 || len(updated.Groups) != 2 {
+		t.Fatalf("update without groups: groups = %v, changed = %v, err = %v; want both kept", names(updated), changed, err)
+	}
+
+	updated, changed, err = s.Update(ctx, unit.ID, Input{Name: unit.Name, GroupIDs: []uint{b.ID}}, user)
+	if err != nil || !slices.Equal(changed, []Field{FieldGroups}) || !slices.Equal(names(updated), []string{b.Name}) {
+		t.Fatalf("update: groups = %v, changed = %v, err = %v; want [%s], [groups]", names(updated), changed, err, b.Name)
+	}
+
+	if _, _, err := s.Update(ctx, unit.ID, Input{Name: unit.Name, GroupIDs: []uint{0}}, user); !errors.Is(err, ErrGroupNotFound) {
+		t.Errorf("unknown group: err = %v, want ErrGroupNotFound", err)
+	}
+
+	// Setting the position leaves the groups alone.
+	updated, err = s.SetPosition(ctx, unit.ID, &Position{Latitude: 1, Longitude: 1, Timestamp: time.Now()}, user)
+	if err != nil || !slices.Equal(names(updated), []string{b.Name}) {
+		t.Fatalf("set position: groups = %v, err = %v; want [%s]", names(updated), err, b.Name)
+	}
+
+	updated, changed, err = s.Patch(ctx, unit.ID, func(in *Input) { in.GroupIDs = nil }, user)
+	if err != nil || !slices.Equal(changed, []Field{FieldGroups}) || len(updated.Groups) != 0 {
+		t.Fatalf("clear: groups = %v, changed = %v, err = %v; want none", names(updated), changed, err)
+	}
+
+	// Deleting a group removes it from its units.
+	if _, _, err := s.Update(ctx, unit.ID, Input{Name: unit.Name, GroupIDs: []uint{a.ID}}, user); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.Delete(&a).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Get(ctx, unit.ID); err != nil || len(got.Groups) != 0 {
+		t.Fatalf("after group delete: groups = %v, err = %v; want none", names(got), err)
 	}
 }

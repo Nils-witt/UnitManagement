@@ -505,8 +505,9 @@ paths:
       tags: [groups]
       summary: List groups
       description: >-
-        Sorted by name, members by username. Groups are created when a member
-        first signs in via SSO and kept after their last member leaves.
+        Sorted by name, members by username, units by name. Groups are created
+        when a member first signs in via SSO and kept after their last member
+        leaves.
       operationId: listGroups
       responses:
         "200":
@@ -868,6 +869,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/UnitNameTaken"
         "500":
@@ -926,7 +929,8 @@ paths:
       summary: Update a unit
       description: >
         Replaces the unit's name, symbol and tactical name; a missing or null
-        symbol or tactical name clears it. The position is left alone; it is
+        symbol or tactical name clears it. Its groups are replaced only when
+        `groupIds` is sent. The position is left alone; it is
         set via `PUT /api/units/{id}/position`, and a body with `position` is
         rejected.
       operationId: updateUnit
@@ -947,6 +951,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/UnitNotFound"
         "409":
@@ -957,9 +963,9 @@ paths:
       tags: [units]
       summary: Partially update a unit
       description: >
-        Changes only the fields present in the body. A null symbol or tactical
-        name clears it; symbol and tactical name are replaced as a whole, not
-        merged. The position is set via `PUT /api/units/{id}/position`, and a
+        Changes only the fields present in the body. A null symbol, tactical
+        name or `groupIds` clears it; symbol, tactical name and groups are
+        replaced as a whole, not merged. The position is set via `PUT /api/units/{id}/position`, and a
         body with `position` is rejected.
       operationId: patchUnit
       requestBody:
@@ -979,6 +985,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/UnitNotFound"
         "409":
@@ -1450,7 +1458,7 @@ components:
 
     Group:
       type: object
-      required: [id, name, members, createdAt, updatedAt]
+      required: [id, name, members, units, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1462,6 +1470,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/UserRef"
+        units:
+          type: array
+          description: The units assigned to the group.
+          items:
+            $ref: "#/components/schemas/UnitRef"
         createdAt:
           type: string
           format: date-time
@@ -1607,6 +1620,26 @@ components:
                 - $ref: "#/components/schemas/UserRef"
                 - type: "null"
 
+    UnitRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    UnitGroupIds:
+      type: array
+      description: >-
+        IDs of the groups (see `GET /api/groups`) the unit is assigned to;
+        duplicates are ignored. Only administrators may send it (otherwise
+        403), and an unknown ID is rejected (400).
+      items:
+        type: integer
+        minimum: 1
+
     UnitRequest:
       type: object
       description: The position is not part of it; see `PUT /api/units/{id}/position`.
@@ -1627,6 +1660,13 @@ components:
           oneOf:
             - $ref: "#/components/schemas/TacticalName"
             - type: "null"
+        groupIds:
+          description: >-
+            Replaces the unit's groups; missing or null keeps them (on create:
+            none).
+          oneOf:
+            - $ref: "#/components/schemas/UnitGroupIds"
+            - type: "null"
 
     UnitPatchRequest:
       type: object
@@ -1646,6 +1686,11 @@ components:
           description: A null tactical name, or one without parts, clears it.
           oneOf:
             - $ref: "#/components/schemas/TacticalName"
+            - type: "null"
+        groupIds:
+          description: Replaces the unit's groups; null removes it from all.
+          oneOf:
+            - $ref: "#/components/schemas/UnitGroupIds"
             - type: "null"
 
     TacticalName:
@@ -1723,6 +1768,7 @@ components:
           createdBy,
           updatedBy,
           syncedFrom,
+          groups,
         ]
       properties:
         id:
@@ -1768,6 +1814,11 @@ components:
           oneOf:
             - $ref: "#/components/schemas/SyncRemoteRef"
             - type: "null"
+        groups:
+          type: array
+          description: The groups the unit is assigned to, by name.
+          items:
+            $ref: "#/components/schemas/GroupRef"
 
     SyncRemoteRef:
       type: object

@@ -154,7 +154,9 @@
     "members": "Mitglieder",
     "firstSeen": "Zuerst gesehen",
     "noMembers": "Keine Mitglieder",
-    "empty": "Keine Gruppen gefunden"
+    "empty": "Keine Gruppen gefunden",
+    "units": "Einheiten",
+    "noUnits": "Keine Einheiten"
   },
   "units": {
     "searchLabel": "Einheiten suchen",
@@ -178,7 +180,10 @@
     "courseLabel": "Kurs",
     "courseHint": "Grad ab Norden, optional",
     "editTitle": "{{name}} bearbeiten",
-    "newTitle": "Neue Einheit"
+    "newTitle": "Neue Einheit",
+    "groupsLabel": "Gruppen",
+    "groupsHint": "Gruppen, denen die Einheit zugeordnet ist",
+    "noGroups": "Keine Gruppen"
   },
   "unitRow": {
     "noPosition": "Keine Position",

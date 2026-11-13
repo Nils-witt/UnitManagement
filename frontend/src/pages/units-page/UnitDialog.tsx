@@ -1,9 +1,19 @@
 import { type FormEvent, useState } from 'react';
-import { Button, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
+import {
+  Autocomplete,
+  Button,
+  FormControlLabel,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { PositionInput, Unit, UnitInput } from '../../api/types';
+import type { GroupRef, PositionInput, Unit, UnitInput } from '../../api/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import Modal from '../../components/Modal';
+import { useAuth } from '../../hooks/useAuth';
+import { useGroups } from '../../hooks/useGroups';
 import { errorMessage } from '../../lib/errors';
 import { KMH_PER_MS } from '../../lib/format';
 import { cleanTacticalName } from '../../lib/tacticalName';
@@ -41,6 +51,9 @@ function UnitForm({
   onSubmit: (submission: UnitSubmission) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  // Only administrators may list groups and assign units to them.
+  const isAdmin = useAuth().user?.isAdmin ?? false;
+  const { groups: allGroups, loading: groupsLoading } = useGroups(isAdmin);
   const editing = unit != null;
   const initial = unit?.position;
   const [name, setName] = useState(unit?.name ?? '');
@@ -58,6 +71,7 @@ function UnitForm({
   const [course, setCourse] = useState(initial?.course != null ? String(initial.course) : '');
   const [symbol, setSymbol] = useState(unit?.symbol ?? {});
   const [tacticalName, setTacticalName] = useState(unit?.tacticalName ?? {});
+  const [groups, setGroups] = useState<GroupRef[]>(unit?.groups ?? []);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -130,6 +144,7 @@ function UnitForm({
           name: name.trim(),
           symbol: cleanSymbol(symbol),
           tacticalName: cleanTacticalName(tacticalName),
+          ...(isAdmin ? { groupIds: groups.map((g) => g.id) } : {}),
         },
         position,
       });
@@ -159,6 +174,26 @@ function UnitForm({
         <Typography variant="subtitle2">{t('unitSymbol.title')}</Typography>
         <UnitSymbolFields value={symbol} tacticalName={tacticalName} onChange={setSymbol} />
       </Stack>
+      {isAdmin && (
+        <Autocomplete
+          multiple
+          size="small"
+          options={allGroups.map((g): GroupRef => ({ id: g.id, name: g.name }))}
+          loading={groupsLoading}
+          value={groups}
+          onChange={(_, value) => setGroups(value)}
+          getOptionLabel={(g) => g.name}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          noOptionsText={t('unitDialog.noGroups')}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label={t('unitDialog.groupsLabel')}
+              helperText={t('unitDialog.groupsHint')}
+            />
+          )}
+        />
+      )}
       <FormControlLabel
         control={
           <Switch checked={hasPosition} onChange={(e) => setHasPosition(e.target.checked)} />

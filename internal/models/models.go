@@ -30,9 +30,11 @@ type User struct {
 // Group is a group at the SSO provider. Groups are created the first time a
 // member signs in and kept when their last member leaves.
 type Group struct {
-	ID        uint   `gorm:"primaryKey"`
-	Name      string `gorm:"uniqueIndex;not null"`
-	Users     []User `gorm:"many2many:user_groups"`
+	ID    uint   `gorm:"primaryKey"`
+	Name  string `gorm:"uniqueIndex;not null"`
+	Users []User `gorm:"many2many:user_groups"`
+	// Units are the units assigned to the group.
+	Units     []Unit `gorm:"many2many:unit_groups"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -44,6 +46,16 @@ type UserGroup struct {
 	User    *User  `gorm:"constraint:OnDelete:CASCADE"`
 	GroupID uint   `gorm:"primaryKey;index"`
 	Group   *Group `gorm:"constraint:OnDelete:CASCADE"`
+}
+
+// UnitGroup assigns a unit to a group. It is the explicit join table of
+// Unit.Groups (see database.Connect), so assignments go when either side is
+// deleted.
+type UnitGroup struct {
+	UnitID  uuid.UUID `gorm:"type:uuid;primaryKey"`
+	Unit    *Unit     `gorm:"constraint:OnDelete:CASCADE"`
+	GroupID uint      `gorm:"primaryKey;index"`
+	Group   *Group    `gorm:"constraint:OnDelete:CASCADE"`
 }
 
 // SSO reports whether the account is linked to an SSO identity.
@@ -100,6 +112,8 @@ type Unit struct {
 	// unit into an ordinary local one, when the remote is deleted.
 	SyncRemoteID *uuid.UUID  `gorm:"type:uuid;index"`
 	SyncRemote   *SyncRemote `gorm:"constraint:OnDelete:SET NULL"`
+	// Groups are the groups the unit is assigned to, by name.
+	Groups []Group `gorm:"many2many:unit_groups"`
 }
 
 // UnitSymbol describes a tactical symbol (DV 102) as the component IDs of the

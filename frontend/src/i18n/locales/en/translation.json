@@ -154,7 +154,9 @@
     "members": "Members",
     "firstSeen": "First seen",
     "noMembers": "No members",
-    "empty": "No groups found"
+    "empty": "No groups found",
+    "units": "Units",
+    "noUnits": "No units"
   },
   "units": {
     "searchLabel": "Search units",
@@ -178,7 +180,10 @@
     "courseLabel": "Course",
     "courseHint": "Degrees from north, optional",
     "editTitle": "Edit {{name}}",
-    "newTitle": "New unit"
+    "newTitle": "New unit",
+    "groupsLabel": "Groups",
+    "groupsHint": "Groups the unit is assigned to",
+    "noGroups": "No groups"
   },
   "unitRow": {
     "noPosition": "No position",

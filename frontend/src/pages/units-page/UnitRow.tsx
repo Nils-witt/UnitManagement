@@ -38,6 +38,13 @@ export default function UnitRow({
                 {tacticalName}
               </Typography>
             )}
+            {u.groups.length > 0 && (
+              <Stack direction="row" spacing={0.5} useFlexGap className="unit-row__groups">
+                {u.groups.map((g) => (
+                  <Chip key={g.id} size="small" variant="outlined" label={g.name} />
+                ))}
+              </Stack>
+            )}
             {u.syncedFrom && (
               <Chip
                 size="small"

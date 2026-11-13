@@ -23,6 +23,7 @@ export default function GroupsListCard({ groups, loading }: { groups: Group[]; l
           <TableRow>
             <TableCell>{t('groupsListCard.name')}</TableCell>
             <TableCell>{t('groupsListCard.members')}</TableCell>
+            <TableCell>{t('groupsListCard.units')}</TableCell>
             <TableCell>{t('groupsListCard.firstSeen')}</TableCell>
           </TableRow>
         </TableHead>
@@ -41,12 +42,23 @@ export default function GroupsListCard({ groups, loading }: { groups: Group[]; l
                   </Stack>
                 )}
               </TableCell>
+              <TableCell>
+                {g.units.length === 0 ? (
+                  t('groupsListCard.noUnits')
+                ) : (
+                  <Stack direction="row" spacing={0.5} useFlexGap className="user-row__chips">
+                    {g.units.map((u) => (
+                      <Chip key={u.id} size="small" variant="outlined" label={u.name} />
+                    ))}
+                  </Stack>
+                )}
+              </TableCell>
               <TableCell>{fmtDate(g.createdAt, i18n.language)}</TableCell>
             </TableRow>
           ))}
           {groups.length === 0 && (
             <TableRow>
-              <TableCell colSpan={3} align="center">
+              <TableCell colSpan={4} align="center">
                 {loading ? t('common.loading') : t('groupsListCard.empty')}
               </TableCell>
             </TableRow>

@@ -12,13 +12,17 @@ export interface GroupsData {
 
 const NO_GROUPS: Group[] = [];
 
-/** GET /api/groups, which only administrators may call. */
-export function useGroups(): GroupsData {
+/** GET /api/groups, which only administrators may call; pass `enabled` false
+ * for everyone else. */
+export function useGroups(enabled = true): GroupsData {
   const api = useApi();
   const {
     data: groups,
     loading,
     error,
-  } = useApiQuery({ queryKey: queryKeys.groups, queryFn: () => api.listGroups() }, NO_GROUPS);
+  } = useApiQuery(
+    { queryKey: queryKeys.groups, queryFn: () => api.listGroups(), enabled },
+    NO_GROUPS,
+  );
   return useMemo(() => ({ groups, loading, error }), [groups, loading, error]);
 }

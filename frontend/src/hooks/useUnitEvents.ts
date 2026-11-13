@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../api/queryKeys';
-import type { Unit, UnitEvent } from '../api/types';
+import type { GroupRef, Unit, UnitEvent } from '../api/types';
 import { useApi } from './useApi';
 
 const MIN_RETRY_MS = 1_000;
+
+function sameGroups(a: GroupRef[], b: GroupRef[]): boolean {
+  return a.length === b.length && a.every((g, i) => g.id === b[i].id);
+}
 const MAX_RETRY_MS = 30_000;
 
 /** Keeps the cached unit list live by applying changes pushed over
@@ -22,12 +26,21 @@ export function useUnitEvents(): void {
     let stopped = false;
 
     const apply = (event: UnitEvent) => {
+      let groupsChanged = false;
       queryClient.setQueryData<Unit[]>(queryKeys.units, (units) => {
         // Nothing cached yet: the pending list fetch will include the change.
         if (!units) return units;
+        const before = units.find((u) => u.id === event.id);
+        groupsChanged =
+          event.type === 'deleted'
+            ? (before?.groups.length ?? 0) > 0
+            : !sameGroups(before?.groups ?? [], event.unit.groups);
         const rest = units.filter((u) => u.id !== event.id);
         return event.type === 'deleted' ? rest : [...rest, event.unit];
       });
+      // The group list names each group's units; only refetch it when they
+      // changed, not on every position update.
+      if (groupsChanged) void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
       // An open history refetches, in case the position changed.
       void queryClient.invalidateQueries({ queryKey: queryKeys.unitPositions(event.id) });
     };

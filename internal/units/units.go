@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -33,6 +34,7 @@ var (
 	ErrInvalidPosition     = errors.New("latitude must be between -90 and 90, longitude between -180 and 180, height finite, accuracy and speed finite and not negative, and course at least 0 and below 360")
 	ErrInvalidSymbol       = errors.New("symbol components must be IDs of lowercase letters, digits and dashes")
 	ErrInvalidTacticalName = fmt.Errorf("tactical name parts must be at most %d characters without control characters", MaxTacticalNamePartLength)
+	ErrGroupNotFound       = errors.New("group not found")
 	// ErrUnitSynced means the unit is mirrored from another instance, where
 	// alone it can be changed.
 	ErrUnitSynced = errors.New("unit is synced from another instance and can only be changed there")
@@ -67,6 +69,9 @@ type Input struct {
 	Position     *Position
 	Symbol       *models.UnitSymbol
 	TacticalName *models.TacticalName
+	// GroupIDs are the groups the unit is assigned to; duplicates are
+	// ignored. Update keeps the unit's groups when it is nil.
+	GroupIDs []uint
 }
 
 type Service struct {
@@ -114,9 +119,17 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 		return nil, err
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		groups, err := findGroups(tx, in.GroupIDs)
+		if err != nil {
+			return err
+		}
 		if err := tx.Create(unit).Error; err != nil {
 			return mapWriteError(err, "create unit")
 		}
+		if err := replaceGroups(tx, unit.ID, groups); err != nil {
+			return err
+		}
+		unit.Groups = groups
 		return recordPosition(tx, unit, by)
 	})
 	if err != nil {
@@ -128,13 +141,17 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 }
 
 // Update replaces the unit's editable fields with in, except the position,
-// which only SetPosition changes; in.Position is ignored. It also returns
-// which fields changed (see Changed).
+// which only SetPosition changes; in.Position is ignored. A nil in.GroupIDs
+// keeps the unit's groups. It also returns which fields changed (see
+// Changed).
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models.User) (*models.Unit, []Field, error) {
 	return s.Patch(ctx, id, func(cur *Input) {
-		pos := cur.Position
+		pos, groupIDs := cur.Position, cur.GroupIDs
 		*cur = in
 		cur.Position = pos
+		if in.GroupIDs == nil {
+			cur.GroupIDs = groupIDs
+		}
 	}, by)
 }
 
@@ -166,11 +183,21 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 		if unit.SyncRemoteID != nil {
 			return ErrUnitSynced
 		}
+		if unit.Groups, err = loadGroups(tx, id); err != nil {
+			return err
+		}
 		before := unit
 		in := inputOf(&unit)
 		patch(&in)
 		if err := apply(&unit, in); err != nil {
 			return err
+		}
+		// Only look the groups up when they change: positions are patched
+		// far more often than groups.
+		if !slices.Equal(groupIDs(unit.Groups), normalizeGroupIDs(in.GroupIDs)) {
+			if unit.Groups, err = findGroups(tx, in.GroupIDs); err != nil {
+				return err
+			}
 		}
 		changed = Changed(&before, &unit)
 		// Nothing to write: leave updated_at and updated_by alone and don't
@@ -188,6 +215,11 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 		}
 		if res.RowsAffected == 0 {
 			return ErrUnitNotFound
+		}
+		if slices.Contains(changed, FieldGroups) {
+			if err := replaceGroups(tx, id, unit.Groups); err != nil {
+				return err
+			}
 		}
 		if samePosition(&before, &unit) {
 			return nil
@@ -233,6 +265,7 @@ const (
 	FieldPosition     Field = "position"
 	FieldSymbol       Field = "symbol"
 	FieldTacticalName Field = "tacticalName"
+	FieldGroups       Field = "groups"
 )
 
 // Changed returns the editable fields that differ between a and b.
@@ -249,6 +282,9 @@ func Changed(a, b *models.Unit) []Field {
 	}
 	if !equalPtr(a.TacticalName, b.TacticalName) {
 		changed = append(changed, FieldTacticalName)
+	}
+	if !slices.Equal(groupIDs(a.Groups), groupIDs(b.Groups)) {
+		changed = append(changed, FieldGroups)
 	}
 	return changed
 }
@@ -369,13 +405,83 @@ func equalPtr[T comparable](a, b *T) bool {
 	return a == b || (a != nil && b != nil && *a == *b)
 }
 
+// groupIDs returns the IDs of groups, sorted; it is never nil.
+func groupIDs(groups []models.Group) []uint {
+	ids := make([]uint, len(groups))
+	for i, g := range groups {
+		ids[i] = g.ID
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// normalizeGroupIDs returns ids sorted and without duplicates; it is never
+// nil.
+func normalizeGroupIDs(ids []uint) []uint {
+	out := slices.Clone(ids)
+	if out == nil {
+		out = []uint{}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// findGroups returns the groups with the given IDs by name, or
+// ErrGroupNotFound if one doesn't exist.
+func findGroups(tx *gorm.DB, ids []uint) ([]models.Group, error) {
+	ids = normalizeGroupIDs(ids)
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var groups []models.Group
+	if err := tx.Where("id IN ?", ids).Order("name").Find(&groups).Error; err != nil {
+		return nil, fmt.Errorf("find groups: %w", err)
+	}
+	if len(groups) != len(ids) {
+		return nil, ErrGroupNotFound
+	}
+	return groups, nil
+}
+
+// loadGroups returns the groups the unit is assigned to, by name.
+func loadGroups(tx *gorm.DB, id uuid.UUID) ([]models.Group, error) {
+	var groups []models.Group
+	err := tx.Joins("JOIN unit_groups ON unit_groups.group_id = groups.id").
+		Where("unit_groups.unit_id = ?", id).
+		Order("groups.name").
+		Find(&groups).Error
+	if err != nil {
+		return nil, fmt.Errorf("get groups of unit %s: %w", id, err)
+	}
+	return groups, nil
+}
+
+// replaceGroups assigns the unit to exactly the given groups.
+func replaceGroups(tx *gorm.DB, id uuid.UUID, groups []models.Group) error {
+	if err := tx.Where("unit_id = ?", id).Delete(&models.UnitGroup{}).Error; err != nil {
+		return fmt.Errorf("clear groups of unit %s: %w", id, err)
+	}
+	if len(groups) == 0 {
+		return nil
+	}
+	rows := make([]models.UnitGroup, len(groups))
+	for i, g := range groups {
+		rows[i] = models.UnitGroup{UnitID: id, GroupID: g.ID}
+	}
+	if err := tx.Create(&rows).Error; err != nil {
+		return fmt.Errorf("assign groups to unit %s: %w", id, err)
+	}
+	return nil
+}
+
 func (s *Service) preload(ctx context.Context) *gorm.DB {
-	return s.db.WithContext(ctx).Preload("CreatedBy").Preload("UpdatedBy").Preload("SyncRemote")
+	return s.db.WithContext(ctx).Preload("CreatedBy").Preload("UpdatedBy").Preload("SyncRemote").
+		Preload("Groups", func(db *gorm.DB) *gorm.DB { return db.Order("name") })
 }
 
 // inputOf returns the unit's editable fields.
 func inputOf(unit *models.Unit) Input {
-	in := Input{Name: unit.Name, Symbol: unit.Symbol, TacticalName: unit.TacticalName}
+	in := Input{Name: unit.Name, Symbol: unit.Symbol, TacticalName: unit.TacticalName, GroupIDs: groupIDs(unit.Groups)}
 	if unit.HasPosition() {
 		in.Position = &Position{
 			Latitude:  *unit.Latitude,

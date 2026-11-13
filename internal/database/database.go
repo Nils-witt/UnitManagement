@@ -46,15 +46,18 @@ func Connect(dsn string) (*gorm.DB, error) {
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
-	// Memberships use an explicit join model so their foreign keys cascade.
+	// Memberships and unit assignments use explicit join models so their
+	// foreign keys cascade.
 	err = errors.Join(
 		db.SetupJoinTable(&models.User{}, "Groups", &models.UserGroup{}),
 		db.SetupJoinTable(&models.Group{}, "Users", &models.UserGroup{}),
+		db.SetupJoinTable(&models.Unit{}, "Groups", &models.UnitGroup{}),
+		db.SetupJoinTable(&models.Group{}, "Units", &models.UnitGroup{}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("set up user_groups join table: %w", err)
+		return nil, fmt.Errorf("set up group join tables: %w", err)
 	}
-	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Group{}, &models.UserGroup{}, &models.SyncRemote{}, &models.Unit{}, &models.UnitPosition{}, &models.AuditLog{}, &models.Setting{}, &models.APIKey{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Group{}, &models.UserGroup{}, &models.SyncRemote{}, &models.Unit{}, &models.UnitGroup{}, &models.UnitPosition{}, &models.AuditLog{}, &models.Setting{}, &models.APIKey{}); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
 	// SSO accounts are looked up by subject alone. Not unique: accounts

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ func TestUnitPatchRequest(t *testing.T) {
 			Position:     &units.Position{Latitude: 1, Longitude: 2, Height: &height, Timestamp: ts},
 			Symbol:       &models.UnitSymbol{Grundzeichen: "fahrzeug"},
 			TacticalName: &models.TacticalName{Number: "1"},
+			GroupIDs:     []uint{1, 2},
 		}
 	}
 
@@ -41,9 +43,14 @@ func TestUnitPatchRequest(t *testing.T) {
 				t.Errorf("got %+v, want only name changed", in)
 			}
 		}},
-		{"null clears", `{"symbol":null,"tacticalName":null}`, func(t *testing.T, in units.Input) {
-			if in.Name != "Alpha" || in.Position == nil || in.Symbol != nil || in.TacticalName != nil {
+		{"null clears", `{"symbol":null,"tacticalName":null,"groupIds":null}`, func(t *testing.T, in units.Input) {
+			if in.Name != "Alpha" || in.Position == nil || in.Symbol != nil || in.TacticalName != nil || len(in.GroupIDs) != 0 {
 				t.Errorf("got %+v, want name and position kept and rest cleared", in)
+			}
+		}},
+		{"groups replaced", `{"groupIds":[3]}`, func(t *testing.T, in units.Input) {
+			if !slices.Equal(in.GroupIDs, []uint{3}) || in.Symbol == nil {
+				t.Errorf("got %+v, want only groups replaced", in)
 			}
 		}},
 	}
@@ -65,7 +72,7 @@ func TestUnitPatchRequest(t *testing.T) {
 }
 
 func TestUnitPatchRequestErrors(t *testing.T) {
-	for _, body := range []string{`{"name":null}`, `{"name":5}`, `{"symbol":"x"}`} {
+	for _, body := range []string{`{"name":null}`, `{"name":5}`, `{"symbol":"x"}`, `{"groupIds":[-1]}`} {
 		var req unitPatchRequest
 		if err := json.Unmarshal([]byte(body), &req); err != nil {
 			t.Fatal(err)
@@ -100,6 +107,32 @@ func TestRejectPosition(t *testing.T) {
 		}
 		if tt.reject && w.Code != http.StatusBadRequest {
 			t.Errorf("%s: status = %d, want 400", tt.body, w.Code)
+		}
+	}
+}
+
+func TestRejectGroups(t *testing.T) {
+	for _, tt := range []struct {
+		body    string
+		isAdmin bool
+		reject  bool
+	}{
+		{`{"name":"Alpha"}`, false, false},
+		{`{"name":"Alpha","groupIds":null}`, false, false},
+		{`{"name":"Alpha","groupIds":[1]}`, false, true},
+		{`{"name":"Alpha","groupIds":[]}`, false, true},
+		{`{"name":"Alpha","groupIds":[1]}`, true, false},
+	} {
+		var req unitRequest
+		if err := json.Unmarshal([]byte(tt.body), &req); err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		if got := rejectGroups(w, req.GroupIDs != nil, tt.isAdmin); got != tt.reject {
+			t.Errorf("%s (admin %v): rejected = %v, want %v", tt.body, tt.isAdmin, got, tt.reject)
+		}
+		if tt.reject && w.Code != http.StatusForbidden {
+			t.Errorf("%s: status = %d, want 403", tt.body, w.Code)
 		}
 	}
 }

@@ -4,9 +4,11 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-// groupRef is how a user response names one of their groups.
+// groupRef is how a user or unit response names one of its groups.
 type groupRef struct {
 	ID   uint   `json:"id"`
 	Name string `json:"name"`
@@ -17,12 +19,20 @@ type memberRef struct {
 	Username string `json:"username"`
 }
 
+// unitRef is how a group response names one of its units.
+type unitRef struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
 type groupResponse struct {
-	ID        uint        `json:"id"`
-	Name      string      `json:"name"`
-	Members   []memberRef `json:"members"`
-	CreatedAt time.Time   `json:"createdAt"`
-	UpdatedAt time.Time   `json:"updatedAt"`
+	ID      uint        `json:"id"`
+	Name    string      `json:"name"`
+	Members []memberRef `json:"members"`
+	// Units are the units assigned to the group, by name.
+	Units     []unitRef `json:"units"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +48,11 @@ func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
 		for j, u := range g.Users {
 			members[j] = memberRef{ID: u.ID, Username: u.Username}
 		}
-		resp[i] = groupResponse{ID: g.ID, Name: g.Name, Members: members, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt}
+		assigned := make([]unitRef, len(g.Units))
+		for j, u := range g.Units {
+			assigned[j] = unitRef{ID: u.ID, Name: u.Name}
+		}
+		resp[i] = groupResponse{ID: g.ID, Name: g.Name, Members: members, Units: assigned, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

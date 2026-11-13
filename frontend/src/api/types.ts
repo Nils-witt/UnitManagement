@@ -218,6 +218,16 @@ export interface UnitStatus {
   timestamp: string;
 }
 
+/** A unit's latest report of FMS 0, 5 or 9: these ask for attention and
+ * leave its status alone. Pending while `acknowledgedAt` is null. */
+export interface UnitStatusRequest {
+  code: number;
+  timestamp: string;
+  acknowledgedAt: string | null;
+  /** The username of whoever acknowledged it. */
+  acknowledgedBy: string | null;
+}
+
 export interface Unit {
   id: string;
   name: string;
@@ -235,6 +245,8 @@ export interface Unit {
   syncedFrom: SyncRemoteRef | null;
   /** The groups the unit is assigned to, by name. */
   groups: GroupRef[];
+  /** One per request code at most, by code. */
+  requests: UnitStatusRequest[];
 }
 
 export interface SyncRemoteRef {
@@ -281,6 +293,7 @@ export const AUDIT_ACTIONS = [
   'unit.create',
   'unit.update',
   'unit.delete',
+  'unit.request_ack',
   'settings.update',
 ] as const;
 

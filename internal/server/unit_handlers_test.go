@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"go-unit-mangement/internal/models"
 	"go-unit-mangement/internal/units"
 )
@@ -223,5 +225,30 @@ func TestParseHistoryQuery(t *testing.T) {
 					limit, gotSince, gotTo, tt.wantLimit, tt.wantSince, tt.wantTo)
 			}
 		})
+	}
+}
+
+func TestAcknowledgeStatusRequestRejectsOtherCodes(t *testing.T) {
+	s := &Server{}
+	for _, code := range []string{"3", "x", "10"} {
+		r := httptest.NewRequest(http.MethodPost, "/api/units/"+uuid.NewString()+"/status-requests/"+code+"/acknowledge", nil)
+		r.SetPathValue("id", uuid.NewString())
+		r.SetPathValue("code", code)
+		w := httptest.NewRecorder()
+		s.handleAcknowledgeStatusRequest(w, r)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("code %s: status = %d, want 404", code, w.Code)
+		}
+	}
+}
+
+func TestUnitResponseRequests(t *testing.T) {
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	resp := toUnitResponse(&models.Unit{Name: "Alpha", StatusRequests: []models.UnitStatusRequest{{Code: 5, Timestamp: ts}}})
+	if len(resp.Requests) != 1 || resp.Requests[0].Code != 5 || resp.Requests[0].AcknowledgedAt != nil {
+		t.Errorf("requests = %+v", resp.Requests)
+	}
+	if resp := toUnitResponse(&models.Unit{Name: "Bravo"}); resp.Requests == nil {
+		t.Error("requests = null, want []")
 	}
 }

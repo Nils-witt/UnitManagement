@@ -45,6 +45,27 @@ func TestUpsertSynced(t *testing.T) {
 		t.Fatalf("history = %+v, %v; want 2 entries without a user", history, err)
 	}
 
+	// Requests are mirrored as the remote has them, acknowledgements included.
+	ackAt, ackBy := ts.Add(2*time.Minute), "remote-user"
+	in.StatusRequests = []StatusRequest{{Code: 5, Timestamp: ts, AcknowledgedAt: &ackAt, AcknowledgedBy: &ackBy}, {Code: 0, Timestamp: ts}}
+	if changed, err := s.UpsertSynced(ctx, remote.ID, id, in); err != nil || !changed {
+		t.Fatalf("requests: changed = %v, err = %v", changed, err)
+	}
+	mirrored, err := s.Get(ctx, id)
+	if err != nil || len(mirrored.StatusRequests) != 2 || mirrored.StatusRequests[1].AcknowledgedBy == nil || *mirrored.StatusRequests[1].AcknowledgedBy != ackBy {
+		t.Fatalf("mirrored requests = %+v, %v", mirrored.StatusRequests, err)
+	}
+	if changed, err := s.UpsertSynced(ctx, remote.ID, id, in); err != nil || changed {
+		t.Fatalf("requests unchanged: changed = %v, err = %v", changed, err)
+	}
+	if _, err := s.AcknowledgeRequest(ctx, id, 0, user); !errors.Is(err, ErrUnitSynced) {
+		t.Errorf("local acknowledgement: err = %v, want ErrUnitSynced", err)
+	}
+	in.StatusRequests = nil
+	if changed, err := s.UpsertSynced(ctx, remote.ID, id, in); err != nil || !changed {
+		t.Fatalf("requests removed: changed = %v, err = %v", changed, err)
+	}
+
 	// Only the remote changes it.
 	if _, _, err := s.Update(ctx, id, in, user); !errors.Is(err, ErrUnitSynced) {
 		t.Errorf("local update: err = %v, want ErrUnitSynced", err)

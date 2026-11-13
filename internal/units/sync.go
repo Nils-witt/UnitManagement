@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -33,6 +34,9 @@ func (s *Service) UpsertSynced(ctx context.Context, remoteID, id uuid.UUID, in I
 				return mapWriteError(err, "create synced unit")
 			}
 			created, changed = true, true
+			if err := replaceRequests(tx, id, unit.StatusRequests); err != nil {
+				return err
+			}
 			return recordPosition(tx, &unit, nil)
 		}
 		if err != nil {
@@ -41,11 +45,15 @@ func (s *Service) UpsertSynced(ctx context.Context, remoteID, id uuid.UUID, in I
 		if unit.SyncRemoteID == nil || *unit.SyncRemoteID != remoteID {
 			return ErrNotMirrored
 		}
+		if unit.StatusRequests, err = loadRequests(tx, id); err != nil {
+			return err
+		}
 		before := unit
 		if err := apply(&unit, in); err != nil {
 			return err
 		}
-		if len(Changed(&before, &unit)) == 0 {
+		fields := Changed(&before, &unit)
+		if len(fields) == 0 {
 			return nil
 		}
 		changed = true
@@ -54,6 +62,11 @@ func (s *Service) UpsertSynced(ctx context.Context, remoteID, id uuid.UUID, in I
 			Updates(&unit)
 		if res.Error != nil {
 			return mapWriteError(res.Error, fmt.Sprintf("update synced unit %s", id))
+		}
+		if slices.Contains(fields, FieldStatusRequests) {
+			if err := replaceRequests(tx, id, unit.StatusRequests); err != nil {
+				return err
+			}
 		}
 		if samePosition(&before, &unit) {
 			return nil

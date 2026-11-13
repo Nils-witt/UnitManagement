@@ -37,6 +37,8 @@ const (
 	ActionUnitCreate        Action = "unit.create"
 	ActionUnitUpdate        Action = "unit.update"
 	ActionUnitDelete        Action = "unit.delete"
+	// ActionUnitRequestAck is an acknowledged FMS 0, 5 or 9 request.
+	ActionUnitRequestAck Action = "unit.request_ack"
 	// ActionSettingsUpdate has no target; Details names the changed fields.
 	ActionSettingsUpdate Action = "settings.update"
 )

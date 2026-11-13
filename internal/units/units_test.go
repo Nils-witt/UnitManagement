@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"go-unit-mangement/internal/models"
 )
 
@@ -247,5 +249,26 @@ func TestChanged(t *testing.T) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeRequests(t *testing.T) {
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	got, err := normalizeRequests(uuid.Nil, []StatusRequest{{Code: 9, Timestamp: ts}, {Code: 0, Timestamp: ts}})
+	if err != nil || len(got) != 2 || got[0].Code != 0 || got[1].Code != 9 {
+		t.Errorf("got %+v, %v; want 0 and 9 by code", got, err)
+	}
+	for _, in := range [][]StatusRequest{
+		{{Code: 3, Timestamp: ts}},
+		{{Code: 5, Timestamp: ts}, {Code: 5, Timestamp: ts.Add(time.Second)}},
+	} {
+		if _, err := normalizeRequests(uuid.Nil, in); !errors.Is(err, ErrInvalidRequest) {
+			t.Errorf("%+v: err = %v, want ErrInvalidRequest", in, err)
+		}
+	}
+	for code, want := range map[int]bool{0: true, 1: false, 3: false, 5: true, 6: false, 9: true} {
+		if IsRequestCode(code) != want {
+			t.Errorf("IsRequestCode(%d) = %v", code, !want)
+		}
 	}
 }

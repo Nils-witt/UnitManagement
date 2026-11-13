@@ -33,7 +33,7 @@ The token's subject resolves to an account the same way an SSO sign-in does, cre
 
 ## Syncing units between instances
 
-An instance can mirror the units of other instances ("sync remotes"), the same way [Tileserve-GO](https://github.com/Nils-witt/Tileserve-GO) mirrors maps. Mirrored units keep their IDs, show which instance they come from, and can only be changed there: editing, moving or deleting one locally is refused with `409 Conflict`. Their position history is recorded locally as positions arrive.
+An instance can mirror the units of other instances ("sync remotes"), the same way [Tileserve-GO](https://github.com/Nils-witt/Tileserve-GO) mirrors maps. Mirrored units keep their IDs, show which instance they come from, and can only be changed there: editing, moving or deleting one locally is refused with `409 Conflict`. Their position history is recorded locally as positions arrive. Their status requests (FMS 0, 5 and 9, which wait to be acknowledged instead of changing the status) are mirrored with them; acknowledging one on the mirror acknowledges it on the instance it comes from, as the user the mirror syncs as, and the change comes back through sync.
 
 Each instance has a persistent identity in `KEYS_DIR` (default `./data/keys`), created on first start: a server UUID (`server.uuid`) and a 4096-bit RSA key pair (`server.key`, `server.pub`). Keep this directory on persistent storage (in Docker, mount a volume and set `KEYS_DIR`, e.g. `/data/keys`): a new identity has to be registered again on every remote.
 
@@ -118,7 +118,8 @@ The full API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1
 | POST   | `/api/units`       | `{name, position?: {lat, lon, height?, accuracy?, speed?, course?, timestamp?}, symbol?, tacticalName?}` |
 | GET    | `/api/units/events` | WebSocket pushing `{type, id, unit?}` on every unit create/update/delete |
 | GET    | `/api/units/{id}`  | Get unit by UUID                     |
-| PUT    | `/api/units/{id}/status` | `{code: 0-9, timestamp?}`: sets the FMS status; the same status again changes nothing |
+| PUT    | `/api/units/{id}/status` | `{code: 0-9, timestamp?}`: sets the FMS status; the same status again changes nothing. 0, 5 and 9 are requests: the status stays, and the unit's request of that code is replaced, pending |
+| POST   | `/api/units/{id}/status-requests/{code}/acknowledge` | Acknowledges the unit's request of code 0, 5 or 9; a synced unit's at its remote |
 | DELETE | `/api/units/{id}/status` | Clears the FMS status |
 | GET    | `/api/units/{id}/positions?limit=&since=&to=` | Position history, newest first; `since` and `to` (RFC 3339) limit it to measurements in that timeframe |
 | PUT    | `/api/units/{id}`  | Same body as POST; a missing position clears it |

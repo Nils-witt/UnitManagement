@@ -263,3 +263,118 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("after group delete: groups = %v, err = %v; want none", names(got), err)
 	}
 }
+
+func TestStatusRequests(t *testing.T) {
+	s, user := newDBService(t)
+	ctx := t.Context()
+	events, stop := s.Subscribe()
+	defer stop()
+
+	ts := time.Now().UTC().Truncate(time.Second)
+	unit, err := s.Create(ctx, Input{Name: rand.Text()[:8] + "-requests"}, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-events // created
+	if _, err := s.SetStatus(ctx, unit.ID, &Status{Code: 3, Timestamp: ts}, user); err != nil {
+		t.Fatal(err)
+	}
+	<-events
+
+	// A 5 keeps the status and is recorded as a pending request.
+	updated, err := s.SetStatus(ctx, unit.ID, &Status{Code: 5, Timestamp: ts.Add(time.Minute)}, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *updated.Status != 3 || !updated.StatusTimestamp.Equal(ts) {
+		t.Errorf("status = %d at %s, want 3 kept", *updated.Status, updated.StatusTimestamp)
+	}
+	if len(updated.StatusRequests) != 1 || updated.StatusRequests[0].Code != 5 || updated.StatusRequests[0].AcknowledgedAt != nil {
+		t.Fatalf("requests = %+v, want one pending 5", updated.StatusRequests)
+	}
+	if ev := <-events; ev.Type != EventUpdated || len(ev.Unit.StatusRequests) != 1 {
+		t.Fatalf("event = %+v, want an update with the request", ev)
+	}
+
+	// The same report again changes nothing; a 0 is a request of its own.
+	if _, err := s.SetStatus(ctx, unit.ID, &Status{Code: 5, Timestamp: ts.Add(time.Minute)}, user); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev := <-events:
+		t.Fatalf("repeat sent event %+v", ev)
+	default:
+	}
+	updated, err = s.SetStatus(ctx, unit.ID, &Status{Code: 0, Timestamp: ts.Add(2 * time.Minute)}, user)
+	if err != nil || len(updated.StatusRequests) != 2 || updated.StatusRequests[0].Code != 0 {
+		t.Fatalf("0: requests = %+v, err = %v; want 0 and 5", updated.StatusRequests, err)
+	}
+	<-events
+
+	acked, err := s.AcknowledgeRequest(ctx, unit.ID, 5, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := acked.StatusRequests[1]
+	if r.Code != 5 || r.AcknowledgedAt == nil || r.AcknowledgedBy == nil || *r.AcknowledgedBy != user.Username {
+		t.Fatalf("acknowledged = %+v", r)
+	}
+	if acked.StatusRequests[0].AcknowledgedAt != nil {
+		t.Errorf("0 was acknowledged too")
+	}
+	<-events
+	if _, err := s.AcknowledgeRequest(ctx, unit.ID, 5, user); err != nil {
+		t.Errorf("acknowledge again: %v", err)
+	}
+	if _, err := s.AcknowledgeRequest(ctx, unit.ID, 9, user); !errors.Is(err, ErrRequestNotFound) {
+		t.Errorf("acknowledge 9: err = %v, want ErrRequestNotFound", err)
+	}
+
+	// A new 5 replaces the acknowledged one and is pending again.
+	later := ts.Add(3 * time.Minute)
+	updated, err = s.SetStatus(ctx, unit.ID, &Status{Code: 5, Timestamp: later}, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = updated.StatusRequests[1]
+	if len(updated.StatusRequests) != 2 || !r.Timestamp.Equal(later) || r.AcknowledgedAt != nil || r.AcknowledgedBy != nil {
+		t.Fatalf("replaced = %+v, want a pending 5 at %s", updated.StatusRequests, later)
+	}
+	if *updated.Status != 3 {
+		t.Errorf("status = %d, want 3", *updated.Status)
+	}
+
+	// Update keeps the requests.
+	updated, _, err = s.Update(ctx, unit.ID, Input{Name: unit.Name + "-renamed"}, user)
+	if err != nil || len(updated.StatusRequests) != 2 {
+		t.Fatalf("update: requests = %+v, err = %v; want them kept", updated.StatusRequests, err)
+	}
+}
+
+func TestConnectMovesRequestStatuses(t *testing.T) {
+	s, user := newDBService(t)
+	ctx := t.Context()
+
+	ts := time.Now().UTC().Truncate(time.Second)
+	unit, err := s.Create(ctx, Input{Name: rand.Text()[:8] + "-legacy"}, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As stored before requests existed.
+	if err := s.db.Model(&models.Unit{}).Where("id = ?", unit.ID).Updates(map[string]any{"status": 5, "status_timestamp": ts}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Connect(os.Getenv("TEST_DATABASE_URL")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(ctx, unit.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != nil || got.StatusTimestamp != nil {
+		t.Errorf("status = %v, want none", *got.Status)
+	}
+	if len(got.StatusRequests) != 1 || got.StatusRequests[0].Code != 5 || !got.StatusRequests[0].Timestamp.Equal(ts) || got.StatusRequests[0].AcknowledgedAt != nil {
+		t.Errorf("requests = %+v, want a pending 5 at %s", got.StatusRequests, ts)
+	}
+}

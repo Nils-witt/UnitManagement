@@ -293,6 +293,7 @@
       "unit.create": "Unit created",
       "unit.update": "Unit changed",
       "unit.delete": "Unit deleted",
+      "unit.request_ack": "Status request acknowledged",
       "settings.update": "Settings changed"
     },
     "targetTypes": {
@@ -396,5 +397,13 @@
       "8": "At destination",
       "9": "Foreign registration"
     }
+  },
+  "unitRequests": {
+    "acknowledge": "Acknowledge",
+    "acknowledgeTitle": "Acknowledge request",
+    "acknowledgeMessage": "Acknowledge status {{code}} ({{label}}) of {{name}}?",
+    "acknowledgeAria": "Acknowledge status {{code}} of {{name}}",
+    "chip": "Request {{code}}",
+    "chipHint": "{{label}}, {{at}}. Click to acknowledge."
   }
 }

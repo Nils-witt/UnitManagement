@@ -61,16 +61,22 @@ func (c *Client) authHeader() (string, error) {
 // StatusError is returned when the remote answers with a status other than
 // 200 OK.
 type StatusError struct {
+	// Method is empty for GET.
+	Method  string
 	Path    string
 	Status  int
 	Message string
 }
 
 func (e *StatusError) Error() string {
-	if e.Message != "" {
-		return fmt.Sprintf("GET %s: status %d: %s", e.Path, e.Status, e.Message)
+	method := e.Method
+	if method == "" {
+		method = http.MethodGet
 	}
-	return fmt.Sprintf("GET %s: status %d", e.Path, e.Status)
+	if e.Message != "" {
+		return fmt.Sprintf("%s %s: status %d: %s", method, e.Path, e.Status, e.Message)
+	}
+	return fmt.Sprintf("%s %s: status %d", method, e.Path, e.Status)
 }
 
 // ListUnits returns every unit on the remote.
@@ -107,6 +113,37 @@ func (c *Client) ListUnits(ctx context.Context) ([]RemoteUnit, error) {
 	return list, nil
 }
 
+// AcknowledgeRequest acknowledges the unit's status request of code on the
+// remote. 202 Accepted counts too: the remote forwarded it to the instance it
+// mirrors the unit from.
+func (c *Client) AcknowledgeRequest(ctx context.Context, unitID uuid.UUID, code int) error {
+	path := fmt.Sprintf("/api/units/%s/status-requests/%d/acknowledge", unitID, code)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	header, err := c.authHeader()
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", header)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("POST %s: %w", path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body := io.LimitReader(resp.Body, maxResponseSize)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		var e struct {
+			Error string `json:"error"`
+		}
+		_ = json.NewDecoder(body).Decode(&e)
+		return &StatusError{Method: http.MethodPost, Path: path, Status: resp.StatusCode, Message: e.Error}
+	}
+	return nil
+}
+
 // DialEvents opens the remote's unit event stream. The caller closes the
 // connection.
 func (c *Client) DialEvents(ctx context.Context) (*websocket.Conn, error) {
@@ -140,6 +177,17 @@ type RemoteUnit struct {
 	Status       *RemoteStatus        `json:"status"`
 	Symbol       *models.UnitSymbol   `json:"symbol"`
 	TacticalName *models.TacticalName `json:"tacticalName"`
+	// Requests are the unit's FMS 0, 5 and 9 reports. Remotes from before
+	// requests existed send none.
+	Requests []RemoteStatusRequest `json:"requests"`
+}
+
+// RemoteStatusRequest is a unit's latest report of a request code.
+type RemoteStatusRequest struct {
+	Code           int        `json:"code"`
+	Timestamp      time.Time  `json:"timestamp"`
+	AcknowledgedAt *time.Time `json:"acknowledgedAt"`
+	AcknowledgedBy *string    `json:"acknowledgedBy"`
 }
 
 type RemotePosition struct {
@@ -170,6 +218,11 @@ func (u *RemoteUnit) Input() units.Input {
 	}
 	if st := u.Status; st != nil && st.Code != nil && st.Timestamp != nil {
 		in.Status = &units.Status{Code: *st.Code, Timestamp: *st.Timestamp}
+	}
+	for _, r := range u.Requests {
+		in.StatusRequests = append(in.StatusRequests, units.StatusRequest{
+			Code: r.Code, Timestamp: r.Timestamp, AcknowledgedAt: r.AcknowledgedAt, AcknowledgedBy: r.AcknowledgedBy,
+		})
 	}
 	return in
 }

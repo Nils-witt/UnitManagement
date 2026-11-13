@@ -119,6 +119,23 @@ type Unit struct {
 	SyncRemote   *SyncRemote `gorm:"constraint:OnDelete:SET NULL"`
 	// Groups are the groups the unit is assigned to, by name.
 	Groups []Group `gorm:"many2many:unit_groups"`
+	// StatusRequests are the unit's latest FMS 0, 5 and 9 reports, at most
+	// one per code, by code.
+	StatusRequests []UnitStatusRequest `gorm:"constraint:OnDelete:CASCADE"`
+}
+
+// UnitStatusRequest is a unit's latest report of an FMS status that asks for
+// attention (0, 5, 9) instead of changing its status. It waits until someone
+// acknowledges it; a new report of the same code replaces it and makes it
+// pending again.
+type UnitStatusRequest struct {
+	UnitID    uuid.UUID `gorm:"type:uuid;primaryKey"`
+	Code      int       `gorm:"type:smallint;primaryKey"`
+	Timestamp time.Time `gorm:"not null"`
+	// AcknowledgedAt and AcknowledgedBy (a username, kept when the account
+	// is deleted) are nil while the request is pending.
+	AcknowledgedAt *time.Time
+	AcknowledgedBy *string
 }
 
 // UnitSymbol describes a tactical symbol (DV 102) as the component IDs of the

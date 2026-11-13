@@ -114,6 +114,7 @@ func (s *Server) Handler(frontend fs.FS) http.Handler {
 	mux.Handle("DELETE /api/units/{id}/position", authed(s.handleClearUnitPosition))
 	mux.Handle("PUT /api/units/{id}/status", authed(s.handleSetUnitStatus))
 	mux.Handle("DELETE /api/units/{id}/status", authed(s.handleClearUnitStatus))
+	mux.Handle("POST /api/units/{id}/status-requests/{code}/acknowledge", authed(s.handleAcknowledgeStatusRequest))
 	mux.Handle("PUT /api/units/{id}", authed(s.handleUpdateUnit))
 	mux.Handle("PATCH /api/units/{id}", authed(s.handlePatchUnit))
 	mux.Handle("DELETE /api/units/{id}", authed(s.handleDeleteUnit))

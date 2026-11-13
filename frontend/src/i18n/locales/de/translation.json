@@ -293,6 +293,7 @@
       "unit.create": "Einheit angelegt",
       "unit.update": "Einheit geändert",
       "unit.delete": "Einheit gelöscht",
+      "unit.request_ack": "Statusanfrage quittiert",
       "settings.update": "Einstellungen geändert"
     },
     "targetTypes": {
@@ -396,5 +397,13 @@
       "8": "Am Transportziel",
       "9": "Fremdanmeldung"
     }
+  },
+  "unitRequests": {
+    "acknowledge": "Quittieren",
+    "acknowledgeTitle": "Anfrage quittieren",
+    "acknowledgeMessage": "Status {{code}} ({{label}}) von {{name}} quittieren?",
+    "acknowledgeAria": "Status {{code}} von {{name}} quittieren",
+    "chip": "Anfrage {{code}}",
+    "chipHint": "{{label}}, {{at}}. Klicken zum Quittieren."
   }
 }

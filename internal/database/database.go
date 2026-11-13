@@ -57,7 +57,7 @@ func Connect(dsn string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("set up group join tables: %w", err)
 	}
-	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Group{}, &models.UserGroup{}, &models.SyncRemote{}, &models.Unit{}, &models.UnitGroup{}, &models.UnitPosition{}, &models.AuditLog{}, &models.Setting{}, &models.APIKey{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Session{}, &models.Group{}, &models.UserGroup{}, &models.SyncRemote{}, &models.Unit{}, &models.UnitGroup{}, &models.UnitPosition{}, &models.UnitStatusRequest{}, &models.AuditLog{}, &models.Setting{}, &models.APIKey{}); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
 	// SSO accounts are looked up by subject alone. Not unique: accounts
@@ -77,6 +77,24 @@ func Connect(dsn string) (*gorm.DB, error) {
 			AND NOT EXISTS (SELECT 1 FROM unit_positions p WHERE p.unit_id = u.id)`).Error
 	if err != nil {
 		return nil, fmt.Errorf("backfill position history: %w", err)
+	}
+	// FMS 0, 5 and 9 used to be stored as the unit's status. They are
+	// requests now and leave the status alone, so a unit stored with one
+	// gets it as a pending request and an unknown status: what it had before
+	// is lost. Afterwards no unit has such a status, so this finds nothing.
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`
+			INSERT INTO unit_status_requests (unit_id, code, timestamp)
+			SELECT id, status, status_timestamp FROM units
+			WHERE status IN (0, 5, 9) AND status_timestamp IS NOT NULL
+			ON CONFLICT (unit_id, code) DO UPDATE
+				SET timestamp = EXCLUDED.timestamp, acknowledged_at = NULL, acknowledged_by = NULL`).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`UPDATE units SET status = NULL, status_timestamp = NULL WHERE status IN (0, 5, 9)`).Error
+	})
+	if err != nil {
+		return nil, fmt.Errorf("move status requests: %w", err)
 	}
 
 	return db, nil

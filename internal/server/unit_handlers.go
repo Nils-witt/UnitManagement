@@ -15,6 +15,7 @@ import (
 	"go-unit-mangement/internal/audit"
 	"go-unit-mangement/internal/auth"
 	"go-unit-mangement/internal/models"
+	"go-unit-mangement/internal/remotesync"
 	"go-unit-mangement/internal/units"
 )
 
@@ -87,6 +88,18 @@ type unitResponse struct {
 	SyncedFrom *syncRemoteRefResponse `json:"syncedFrom"`
 	// Groups are the groups the unit is assigned to, by name.
 	Groups []groupRef `json:"groups"`
+	// Requests are the unit's latest FMS 0, 5 and 9 reports, by code. They
+	// leave Status alone and wait to be acknowledged.
+	Requests []statusRequestJSON `json:"requests"`
+}
+
+// statusRequestJSON is a unit's latest report of a request code;
+// acknowledgedAt and acknowledgedBy are null while it is pending.
+type statusRequestJSON struct {
+	Code           int        `json:"code"`
+	Timestamp      time.Time  `json:"timestamp"`
+	AcknowledgedAt *time.Time `json:"acknowledgedAt"`
+	AcknowledgedBy *string    `json:"acknowledgedBy"`
 }
 
 // statusJSON is a unit's FMS status, in responses and in
@@ -126,6 +139,10 @@ func toUnitResponse(u *models.Unit) unitResponse {
 		CreatedBy:    toUserRef(u.CreatedBy),
 		UpdatedBy:    toUserRef(u.UpdatedBy),
 		Groups:       groupRefs(u.Groups),
+		Requests:     make([]statusRequestJSON, len(u.StatusRequests)),
+	}
+	for i, r := range u.StatusRequests {
+		resp.Requests[i] = statusRequestJSON{Code: r.Code, Timestamp: r.Timestamp, AcknowledgedAt: r.AcknowledgedAt, AcknowledgedBy: r.AcknowledgedBy}
 	}
 	if u.SyncRemote != nil {
 		resp.SyncedFrom = &syncRemoteRefResponse{ID: u.SyncRemote.ID, Name: u.SyncRemote.Name}
@@ -487,6 +504,71 @@ func (s *Server) setUnitStatus(w http.ResponseWriter, r *http.Request, id uuid.U
 	writeJSON(w, http.StatusOK, toUnitResponse(unit))
 }
 
+// handleAcknowledgeStatusRequest acknowledges the unit's request of the code
+// in the path. A unit mirrored from another instance is acknowledged there
+// (202 Accepted with the unit as it is here): the change arrives through
+// sync.
+func (s *Server) handleAcknowledgeStatusRequest(w http.ResponseWriter, r *http.Request) {
+	id, ok := unitIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	code, err := strconv.Atoi(r.PathValue("code"))
+	if err != nil || !units.IsRequestCode(code) {
+		writeUnitError(w, units.ErrRequestNotFound)
+		return
+	}
+	current := auth.UserFromContext(r.Context())
+	unit, err := s.units.AcknowledgeRequest(r.Context(), id, code, current)
+	if errors.Is(err, units.ErrUnitSynced) {
+		s.acknowledgeRemoteRequest(w, r, id, code)
+		return
+	}
+	if err != nil {
+		writeUnitError(w, err)
+		return
+	}
+	slog.Info("unit status request acknowledged", "by", current.Username, "unit", unit.Name, "code", code)
+	s.record(r, audit.Entry{
+		Action: audit.ActionUnitRequestAck, TargetType: audit.TargetUnit, TargetID: unit.ID.String(), TargetName: unit.Name,
+		Details: map[string]any{"code": code},
+	})
+	writeJSON(w, http.StatusOK, toUnitResponse(unit))
+}
+
+// acknowledgeRemoteRequest forwards the acknowledgement of a mirrored unit's
+// request to the instance it is mirrored from, which records it under the
+// user this server syncs as.
+func (s *Server) acknowledgeRemoteRequest(w http.ResponseWriter, r *http.Request, id uuid.UUID, code int) {
+	unit, err := s.units.Get(r.Context(), id)
+	if err != nil {
+		writeUnitError(w, err)
+		return
+	}
+	if unit.SyncRemoteID == nil || s.sync == nil {
+		writeUnitError(w, units.ErrUnitSynced)
+		return
+	}
+	err = s.sync.AcknowledgeRequest(r.Context(), *unit.SyncRemoteID, id, code)
+	var statusErr *remotesync.StatusError
+	switch {
+	case errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound:
+		writeUnitError(w, units.ErrRequestNotFound)
+		return
+	case err != nil:
+		slog.Warn("forward status request acknowledgement", "unit", id, "remote", *unit.SyncRemoteID, "err", err)
+		writeError(w, http.StatusBadGateway, "the instance the unit is synced from could not acknowledge it: "+err.Error())
+		return
+	}
+	current := auth.UserFromContext(r.Context())
+	slog.Info("unit status request acknowledged at its remote", "by", current.Username, "unit", unit.Name, "code", code)
+	s.record(r, audit.Entry{
+		Action: audit.ActionUnitRequestAck, TargetType: audit.TargetUnit, TargetID: unit.ID.String(), TargetName: unit.Name,
+		Details: map[string]any{"code": code, "remote": unit.SyncRemoteID.String()},
+	})
+	writeJSON(w, http.StatusAccepted, toUnitResponse(unit))
+}
+
 func (s *Server) handleDeleteUnit(w http.ResponseWriter, r *http.Request) {
 	id, ok := unitIDFromPath(w, r)
 	if !ok {
@@ -528,13 +610,14 @@ func unitIDFromPath(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 // logged and reported as a generic 500.
 func writeUnitError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, units.ErrUnitNotFound):
+	case errors.Is(err, units.ErrUnitNotFound), errors.Is(err, units.ErrRequestNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, units.ErrNameTaken), errors.Is(err, units.ErrUnitSynced):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, units.ErrInvalidName), errors.Is(err, units.ErrInvalidPosition),
 		errors.Is(err, units.ErrInvalidSymbol), errors.Is(err, units.ErrInvalidTacticalName),
-		errors.Is(err, units.ErrGroupNotFound), errors.Is(err, units.ErrInvalidStatus):
+		errors.Is(err, units.ErrGroupNotFound), errors.Is(err, units.ErrInvalidStatus),
+		errors.Is(err, units.ErrInvalidRequest):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		slog.Error("unit management", "err", err)

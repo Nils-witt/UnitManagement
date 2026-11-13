@@ -283,6 +283,15 @@ export class ApiClient {
     return this.sendJsonForJson(`/api/units/${id}/status`, 'PUT', { code });
   }
 
+  /** Acknowledges the unit's pending request of code 0, 5 or 9. */
+  acknowledgeUnitStatusRequest(id: string, code: number): Promise<Unit> {
+    return this.sendJsonForJson(
+      `/api/units/${id}/status-requests/${code}/acknowledge`,
+      'POST',
+      undefined,
+    );
+  }
+
   /** Clears the unit's FMS status. */
   clearUnitStatus(id: string): Promise<Unit> {
     return this.sendJsonForJson(`/api/units/${id}/status`, 'DELETE', undefined);

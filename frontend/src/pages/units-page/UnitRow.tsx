@@ -5,6 +5,7 @@ import UnitSymbolIcon from '../../components/UnitSymbolIcon';
 import { fmsStatusColor } from '../../lib/fmsStatus';
 import { fmtDate, fmtSpeed } from '../../lib/format';
 import { formatTacticalName } from '../../lib/tacticalName';
+import UnitRequestChips from './UnitRequestChips';
 import UnitStatusSelect from './UnitStatusSelect';
 import './UnitRow.scss';
 
@@ -74,6 +75,7 @@ export default function UnitRow({
             {fmtDate(u.status.timestamp, i18n.language)}
           </Typography>
         )}
+        <UnitRequestChips unit={u} />
       </TableCell>
       <TableCell>
         {p ? (

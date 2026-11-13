@@ -39,6 +39,9 @@ var (
 	ErrInvalidTacticalName = fmt.Errorf("tactical name parts must be at most %d characters without control characters", MaxTacticalNamePartLength)
 	ErrGroupNotFound       = errors.New("group not found")
 	ErrInvalidStatus       = fmt.Errorf("status must be an FMS status from %d to %d", MinStatus, MaxStatus)
+	ErrInvalidRequest      = errors.New("status requests must have distinct codes of 0, 5 or 9")
+	// ErrRequestNotFound means the unit has no request of that code.
+	ErrRequestNotFound = errors.New("the unit has no status request of this code")
 	// ErrUnitSynced means the unit is mirrored from another instance, where
 	// alone it can be changed.
 	ErrUnitSynced = errors.New("unit is synced from another instance and can only be changed there")
@@ -72,6 +75,24 @@ type Status struct {
 	Timestamp time.Time
 }
 
+// StatusRequest is a unit's latest report of an FMS status that asks for
+// attention instead of changing its status (see IsRequestCode). It is
+// pending while AcknowledgedAt is nil.
+type StatusRequest struct {
+	Code           int
+	Timestamp      time.Time
+	AcknowledgedAt *time.Time
+	// AcknowledgedBy is the username of whoever acknowledged it.
+	AcknowledgedBy *string
+}
+
+// IsRequestCode reports whether code is an FMS status that is recorded as a
+// request, leaving the unit's status as it was: 0 (urgent request to talk),
+// 5 (request to talk) and 9 (foreign registration).
+func IsRequestCode(code int) bool {
+	return code == 0 || code == 5 || code == 9
+}
+
 // Input holds the editable fields of a unit. A nil Position, Status, Symbol
 // or TacticalName clears it, as does a Symbol or TacticalName without any parts.
 type Input struct {
@@ -80,6 +101,8 @@ type Input struct {
 	Status       *Status
 	Symbol       *models.UnitSymbol
 	TacticalName *models.TacticalName
+	// StatusRequests are the unit's status requests, at most one per code.
+	StatusRequests []StatusRequest
 	// GroupIDs are the groups the unit is assigned to; duplicates are
 	// ignored. Update keeps the unit's groups when it is nil.
 	GroupIDs []uint
@@ -151,16 +174,17 @@ func (s *Service) Create(ctx context.Context, in Input, by *models.User) (*model
 	return unit, nil
 }
 
-// Update replaces the unit's editable fields with in, except the position and
-// the status, which only SetPosition and SetStatus change; in.Position and
-// in.Status are ignored. A nil in.GroupIDs
+// Update replaces the unit's editable fields with in, except the position,
+// the status and the status requests, which only SetPosition, SetStatus and
+// AcknowledgeRequest change; in.Position, in.Status and in.StatusRequests are
+// ignored. A nil in.GroupIDs
 // keeps the unit's groups. It also returns which fields changed (see
 // Changed).
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input, by *models.User) (*models.Unit, []Field, error) {
 	return s.Patch(ctx, id, func(cur *Input) {
-		pos, status, groupIDs := cur.Position, cur.Status, cur.GroupIDs
+		pos, status, requests, groupIDs := cur.Position, cur.Status, cur.StatusRequests, cur.GroupIDs
 		*cur = in
-		cur.Position, cur.Status = pos, status
+		cur.Position, cur.Status, cur.StatusRequests = pos, status, requests
 		if in.GroupIDs == nil {
 			cur.GroupIDs = groupIDs
 		}
@@ -178,14 +202,61 @@ func (s *Service) SetPosition(ctx context.Context, id uuid.UUID, p *Position, by
 // SetStatus sets the unit's FMS status, or clears it when st is nil. Setting
 // the current status again changes nothing, even with a newer timestamp, so
 // repeated reports send no event.
+//
+// A request code (see IsRequestCode) keeps the status and replaces the
+// unit's request of that code instead, pending again even if the old one was
+// acknowledged. Only a repeat with the same timestamp changes nothing.
 func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, st *Status, by *models.User) (*models.Unit, error) {
 	unit, _, err := s.Patch(ctx, id, func(in *Input) {
+		if st != nil && IsRequestCode(st.Code) {
+			ts := st.Timestamp.UTC()
+			requests := make([]StatusRequest, 0, len(in.StatusRequests)+1)
+			for _, r := range in.StatusRequests {
+				if r.Code != st.Code {
+					requests = append(requests, r)
+				} else if r.Timestamp.Equal(ts) {
+					return
+				}
+			}
+			in.StatusRequests = append(requests, StatusRequest{Code: st.Code, Timestamp: ts})
+			return
+		}
 		if st != nil && in.Status != nil && in.Status.Code == st.Code {
 			return
 		}
 		in.Status = st
 	}, by)
 	return unit, err
+}
+
+// AcknowledgeRequest marks the unit's pending request of code as
+// acknowledged by by. Acknowledging it again changes nothing. A unit without
+// that request is ErrRequestNotFound; one mirrored from another instance is
+// ErrUnitSynced, as it can only be acknowledged there.
+func (s *Service) AcknowledgeRequest(ctx context.Context, id uuid.UUID, code int, by *models.User) (*models.Unit, error) {
+	found := false
+	unit, _, err := s.Patch(ctx, id, func(in *Input) {
+		for i, r := range in.StatusRequests {
+			if r.Code != code {
+				continue
+			}
+			found = true
+			if r.AcknowledgedAt != nil {
+				return
+			}
+			now, name := time.Now().UTC(), by.Username
+			in.StatusRequests = slices.Clone(in.StatusRequests)
+			in.StatusRequests[i].AcknowledgedAt, in.StatusRequests[i].AcknowledgedBy = &now, &name
+			return
+		}
+	}, by)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, ErrRequestNotFound
+	}
+	return unit, nil
 }
 
 // Patch updates the unit like Update, with the input patch makes of the
@@ -209,6 +280,9 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 			return ErrUnitSynced
 		}
 		if unit.Groups, err = loadGroups(tx, id); err != nil {
+			return err
+		}
+		if unit.StatusRequests, err = loadRequests(tx, id); err != nil {
 			return err
 		}
 		before := unit
@@ -243,6 +317,11 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, patch func(*Input), b
 		}
 		if slices.Contains(changed, FieldGroups) {
 			if err := replaceGroups(tx, id, unit.Groups); err != nil {
+				return err
+			}
+		}
+		if slices.Contains(changed, FieldStatusRequests) {
+			if err := replaceRequests(tx, id, unit.StatusRequests); err != nil {
 				return err
 			}
 		}
@@ -286,12 +365,15 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.Unit, error
 type Field string
 
 const (
-	FieldName         Field = "name"
-	FieldPosition     Field = "position"
-	FieldStatus       Field = "status"
-	FieldSymbol       Field = "symbol"
-	FieldTacticalName Field = "tacticalName"
-	FieldGroups       Field = "groups"
+	FieldName     Field = "name"
+	FieldPosition Field = "position"
+	FieldStatus   Field = "status"
+	// FieldStatusRequests is set by sync only: requests change through
+	// SetStatus and AcknowledgeRequest, which leave no audit entry for it.
+	FieldStatusRequests Field = "statusRequests"
+	FieldSymbol         Field = "symbol"
+	FieldTacticalName   Field = "tacticalName"
+	FieldGroups         Field = "groups"
 )
 
 // Changed returns the editable fields that differ between a and b.
@@ -305,6 +387,9 @@ func Changed(a, b *models.Unit) []Field {
 	}
 	if !sameStatus(a, b) {
 		changed = append(changed, FieldStatus)
+	}
+	if !sameRequests(a.StatusRequests, b.StatusRequests) {
+		changed = append(changed, FieldStatusRequests)
 	}
 	if !equalPtr(a.Symbol, b.Symbol) {
 		changed = append(changed, FieldSymbol)
@@ -440,6 +525,19 @@ func sameStatus(a, b *models.Unit) bool {
 		(a.StatusTimestamp != nil && b.StatusTimestamp != nil && a.StatusTimestamp.Equal(*b.StatusTimestamp))
 }
 
+// sameRequests reports whether a and b, both sorted by code, hold the same
+// requests.
+func sameRequests(a, b []models.UnitStatusRequest) bool {
+	return slices.EqualFunc(a, b, func(x, y models.UnitStatusRequest) bool {
+		return x.Code == y.Code && x.Timestamp.Equal(y.Timestamp) &&
+			equalTime(x.AcknowledgedAt, y.AcknowledgedAt) && equalPtr(x.AcknowledgedBy, y.AcknowledgedBy)
+	})
+}
+
+func equalTime(a, b *time.Time) bool {
+	return a == b || (a != nil && b != nil && a.Equal(*b))
+}
+
 func equalPtr[T comparable](a, b *T) bool {
 	return a == b || (a != nil && b != nil && *a == *b)
 }
@@ -513,8 +611,36 @@ func replaceGroups(tx *gorm.DB, id uuid.UUID, groups []models.Group) error {
 	return nil
 }
 
+// loadRequests returns the unit's status requests, by code.
+func loadRequests(tx *gorm.DB, id uuid.UUID) ([]models.UnitStatusRequest, error) {
+	var requests []models.UnitStatusRequest
+	if err := tx.Where("unit_id = ?", id).Order("code").Find(&requests).Error; err != nil {
+		return nil, fmt.Errorf("get status requests of unit %s: %w", id, err)
+	}
+	return requests, nil
+}
+
+// replaceRequests stores exactly the given requests for the unit.
+func replaceRequests(tx *gorm.DB, id uuid.UUID, requests []models.UnitStatusRequest) error {
+	if err := tx.Where("unit_id = ?", id).Delete(&models.UnitStatusRequest{}).Error; err != nil {
+		return fmt.Errorf("clear status requests of unit %s: %w", id, err)
+	}
+	if len(requests) == 0 {
+		return nil
+	}
+	rows := slices.Clone(requests)
+	for i := range rows {
+		rows[i].UnitID = id
+	}
+	if err := tx.Create(&rows).Error; err != nil {
+		return fmt.Errorf("store status requests of unit %s: %w", id, err)
+	}
+	return nil
+}
+
 func (s *Service) preload(ctx context.Context) *gorm.DB {
 	return s.db.WithContext(ctx).Preload("CreatedBy").Preload("UpdatedBy").Preload("SyncRemote").
+		Preload("StatusRequests", func(db *gorm.DB) *gorm.DB { return db.Order("code") }).
 		Preload("Groups", func(db *gorm.DB) *gorm.DB { return db.Order("name") })
 }
 
@@ -523,6 +649,11 @@ func inputOf(unit *models.Unit) Input {
 	in := Input{Name: unit.Name, Symbol: unit.Symbol, TacticalName: unit.TacticalName, GroupIDs: groupIDs(unit.Groups)}
 	if unit.Status != nil && unit.StatusTimestamp != nil {
 		in.Status = &Status{Code: *unit.Status, Timestamp: *unit.StatusTimestamp}
+	}
+	for _, r := range unit.StatusRequests {
+		in.StatusRequests = append(in.StatusRequests, StatusRequest{
+			Code: r.Code, Timestamp: r.Timestamp, AcknowledgedAt: r.AcknowledgedAt, AcknowledgedBy: r.AcknowledgedBy,
+		})
 	}
 	if unit.HasPosition() {
 		in.Position = &Position{
@@ -568,6 +699,12 @@ func apply(unit *models.Unit, in Input) error {
 		unit.Status, unit.StatusTimestamp = &code, &ts
 	}
 
+	requests, err := normalizeRequests(unit.ID, in.StatusRequests)
+	if err != nil {
+		return err
+	}
+	unit.StatusRequests = requests
+
 	if in.Position == nil {
 		unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.Speed, unit.Course, unit.PositionTimestamp = nil, nil, nil, nil, nil, nil, nil
 		return nil
@@ -583,6 +720,31 @@ func apply(unit *models.Unit, in Input) error {
 	unit.Latitude, unit.Longitude, unit.Height, unit.Accuracy, unit.Speed, unit.Course, unit.PositionTimestamp =
 		&p.Latitude, &p.Longitude, p.Height, p.Accuracy, p.Speed, p.Course, &ts
 	return nil
+}
+
+// normalizeRequests validates in and returns it as the unit's rows, sorted by
+// code. It always returns a new slice, so the unit's old rows stay intact for
+// Changed.
+func normalizeRequests(unitID uuid.UUID, in []StatusRequest) ([]models.UnitStatusRequest, error) {
+	out := make([]models.UnitStatusRequest, 0, len(in))
+	for _, r := range in {
+		if !IsRequestCode(r.Code) {
+			return nil, ErrInvalidRequest
+		}
+		row := models.UnitStatusRequest{UnitID: unitID, Code: r.Code, Timestamp: r.Timestamp.UTC(), AcknowledgedBy: r.AcknowledgedBy}
+		if r.AcknowledgedAt != nil {
+			at := r.AcknowledgedAt.UTC()
+			row.AcknowledgedAt = &at
+		}
+		out = append(out, row)
+	}
+	slices.SortFunc(out, func(a, b models.UnitStatusRequest) int { return a.Code - b.Code })
+	for i := 1; i < len(out); i++ {
+		if out[i].Code == out[i-1].Code {
+			return nil, ErrInvalidRequest
+		}
+	}
+	return out, nil
 }
 
 // normalizeSymbol validates s and returns a trimmed copy, or nil when it has

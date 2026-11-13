@@ -1064,6 +1064,58 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/units/{id}/status-requests/{code}/acknowledge:
+    parameters:
+      - $ref: "#/components/parameters/UnitId"
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: integer
+          enum: [0, 5, 9]
+    post:
+      tags: [units]
+      summary: Acknowledge a unit's status request
+      description: >
+        Marks the unit's request of the code as acknowledged by the caller.
+        Acknowledging it again changes nothing. A unit synced from another
+        instance is acknowledged there, as the user this server syncs as;
+        the change then arrives through sync. Audited as
+        `unit.request_ack`.
+      operationId: acknowledgeUnitStatusRequest
+      responses:
+        "200":
+          description: The unit with the request acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "202":
+          description: >
+            The unit is synced, and the instance it is synced from
+            acknowledged it. The unit as it is here, before the change
+            arrives.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No such unit, or it has no request of this code.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: The instance the unit is synced from could not acknowledge it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/units/{id}/status:
     parameters:
       - $ref: "#/components/parameters/UnitId"
@@ -1073,7 +1125,10 @@ paths:
       description: >
         Sets the unit's FMS status (0 to 9). Reporting the status it already
         has changes nothing, not even the timestamp, and sends no event.
-        Status changes are not audited.
+        Status changes are not audited. The request codes 0, 5 and 9 leave
+        the status as it was: they replace the unit's request of that code
+        (see `Unit.requests`), pending again even if the old one was
+        acknowledged; the same code with the same timestamp changes nothing.
       operationId: setUnitStatus
       requestBody:
         required: true
@@ -1114,7 +1169,7 @@ paths:
       operationId: clearUnitStatus
       responses:
         "200":
-          description: The unit without a status.
+          description: The unit without a status. Its requests stay.
           content:
             application/json:
               schema:
@@ -1852,6 +1907,7 @@ components:
           updatedBy,
           syncedFrom,
           groups,
+          requests,
         ]
       properties:
         id:
@@ -1909,6 +1965,36 @@ components:
           description: The groups the unit is assigned to, by name.
           items:
             $ref: "#/components/schemas/GroupRef"
+        requests:
+          type: array
+          description: >
+            The unit's latest report of each request code (0, 5, 9), by code.
+            They don't change `status`; each waits to be acknowledged.
+          items:
+            $ref: "#/components/schemas/UnitStatusRequest"
+
+    UnitStatusRequest:
+      type: object
+      required: [code, timestamp, acknowledgedAt, acknowledgedBy]
+      properties:
+        code:
+          type: integer
+          enum: [0, 5, 9]
+        timestamp:
+          type: string
+          format: date-time
+          description: When it was reported.
+        acknowledgedAt:
+          description: Null while pending.
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        acknowledgedBy:
+          description: The username of whoever acknowledged it; null while pending.
+          oneOf:
+            - type: string
+            - type: "null"
 
     SyncRemoteRef:
       type: object

@@ -313,3 +313,46 @@ func TestLogStoreBounded(t *testing.T) {
 		t.Errorf("unknown remote: %v, want empty non-nil", got)
 	}
 }
+
+func TestClientAcknowledgeRequest(t *testing.T) {
+	keyID, key := uuid.New(), testKey(t)
+	unitID := uuid.New()
+	status := http.StatusOK
+	var gotPath string
+	srv := httptest.NewServer(requireKey(t, keyID, key, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"error":"nope"}`))
+	}))
+	defer srv.Close()
+	c := NewClient(srv.URL, keyID, key)
+
+	for _, s := range []int{http.StatusOK, http.StatusAccepted} {
+		status = s
+		if err := c.AcknowledgeRequest(t.Context(), unitID, 5); err != nil {
+			t.Errorf("status %d: %v", s, err)
+		}
+	}
+	if want := "/api/units/" + unitID.String() + "/status-requests/5/acknowledge"; gotPath != want {
+		t.Errorf("path = %s, want %s", gotPath, want)
+	}
+	status = http.StatusNotFound
+	var statusErr *StatusError
+	if err := c.AcknowledgeRequest(t.Context(), unitID, 5); !errors.As(err, &statusErr) || statusErr.Status != http.StatusNotFound || statusErr.Message != "nope" {
+		t.Errorf("404: err = %v", err)
+	}
+}
+
+func TestRemoteUnitInputCarriesRequests(t *testing.T) {
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	by := "alice"
+	u := RemoteUnit{Name: "Alpha", Requests: []RemoteStatusRequest{{Code: 0, Timestamp: ts}, {Code: 5, Timestamp: ts, AcknowledgedAt: &ts, AcknowledgedBy: &by}}}
+	in := u.Input()
+	if len(in.StatusRequests) != 2 || in.StatusRequests[1].AcknowledgedBy != &by || in.StatusRequests[0].AcknowledgedAt != nil {
+		t.Errorf("requests = %+v", in.StatusRequests)
+	}
+}

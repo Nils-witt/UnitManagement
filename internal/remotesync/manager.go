@@ -213,6 +213,17 @@ func (m *Manager) Trigger(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// AcknowledgeRequest acknowledges a status request of a unit mirrored from
+// the remote id on that remote, which alone can change it. The remote's
+// update event then brings the acknowledgement here.
+func (m *Manager) AcknowledgeRequest(ctx context.Context, id, unitID uuid.UUID, code int) error {
+	r, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	return NewClient(r.BaseURL, m.serverUUID, m.key).AcknowledgeRequest(ctx, unitID, code)
+}
+
 // Logs returns the remote's recent sync activity, oldest first.
 func (m *Manager) Logs(id uuid.UUID) []LogEntry { return m.logs.logs(id) }
 
